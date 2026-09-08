@@ -56,6 +56,24 @@ describe('PautasPage — visibilidad de líneas', () => {
     expect(screen.getByText('Todos')).toBeInTheDocument()
   })
 
+  it('con audiovisual.piezas, un editor de nivel bajo y sin membresía en ninguna línea ve TODAS las líneas', async () => {
+    useAuth.mockReturnValue({
+      userProfile: {
+        user_id: 'editor-1',
+        company_id: 'co-1',
+        access_level: 1,
+        admin: false,
+      },
+      can: (key) => key === 'audiovisual.piezas',
+    })
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Georgina')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Sabrina')).toBeInTheDocument()
+    expect(screen.getByText('Todos')).toBeInTheDocument()
+  })
+
   it('sin audiovisual.ver_todo, un usuario de nivel bajo y sin membresía no ve badges de línea (comportamiento previo intacto)', async () => {
     useAuth.mockReturnValue({
       userProfile: {

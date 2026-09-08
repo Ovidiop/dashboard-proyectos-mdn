@@ -64,6 +64,10 @@ export const MODULES = [
         label: 'Recibir notificaciones de pautas audiovisuales',
       },
       { key: 'audiovisual.ver_todo', label: 'Ver pautas audiovisuales de todas las líneas' },
+      {
+        key: 'audiovisual.piezas',
+        label: 'Gestionar piezas y editores de pautas realizadas',
+      },
       { key: 'chequeo.manage', label: 'Registrar fechas de última publicación (Chequeo)' },
       { key: 'chequeo.ver_todo', label: 'Ver Chequeo de todas las líneas' },
     ],

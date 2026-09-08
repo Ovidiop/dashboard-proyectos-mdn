@@ -207,6 +207,7 @@ export const CHANGELOG = [
       'Nuevo: los jefes ahora pueden evaluar una vez al mes los criterios propios de cada cargo (por ejemplo, calidad y compromiso), directamente desde el perfil de cada persona en Evaluaciones. El perfil muestra una nota general que combina lo que mide el sistema con esa evaluación; en cargos sin indicadores automáticos (como Community Manager), la nota general sale solo de la evaluación del jefe.',
       'En el detalle de desempeño de cada persona, los indicadores que no aplican a su cargo (por ejemplo, "Tickets IT" para alguien que no es de soporte) ya no se muestran atenuados: directamente se ocultan, para que la ficha sea más clara.',
       'Corregido: cargos de coordinación/dirección que no producen contenido (Sub-Director, Coordinador de Tecnología, Coordinador de Desarrollo Laboral) tenían un puntaje de desempeño calculado con indicadores que no les correspondían (piezas audiovisuales, campañas, chequeo de redes). Ahora su puntaje se basa solo en el cumplimiento de sus tareas.',
+      'El equipo de Audiovisual ya puede asignar editores y gestionar las piezas de las pautas realizadas (checklist de estado, formato y desglose de piezas), sin necesidad de pedírselo a la coordinadora. Agendar, declinar o marcar una pauta como realizada sigue siendo exclusivo de la coordinadora.',
     ],
   },
   {

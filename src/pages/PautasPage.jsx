@@ -28,7 +28,9 @@ export default function PautasPage() {
     // calculaba `canViewAll=true` para ella con la prop que sí le llegaba.
     setLines(
       visibleLinesForUser(linesRes.data ?? [], userProfile, {
-        extraViewAll: can('audiovisual.ver_todo'),
+        // audiovisual.piezas también levanta el filtro por línea: un editor de
+        // Audiovisual gestiona piezas de cualquier cliente, no solo el de su línea.
+        extraViewAll: can('audiovisual.ver_todo') || can('audiovisual.piezas'),
       }),
     )
     setClients(clientsRes.data ?? [])

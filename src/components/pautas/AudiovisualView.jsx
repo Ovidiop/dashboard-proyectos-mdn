@@ -38,14 +38,24 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
   const canManage = can('audiovisual.manage')
   const canCoordinate = can('audiovisual.coordina')
   const editMode = avEditMode({ canCoordinate, canManage })
+  // Edición de piezas y asignación de editores en pautas 'realizada': el depto
+  // Audiovisual completo, no solo la coordinadora. `canCoordinate` la incluye por
+  // composición (no se duplica la regla de Lizdania en la fila de audiovisual.piezas).
+  // No afecta a `editMode`: agendar/declinar/editar fecha-recurso siguen exclusivos
+  // de audiovisual.coordina.
+  const canEditPiezas = canCoordinate || can('audiovisual.piezas')
   // "Ver todo" (todas las líneas) es una capability aparte de "coordina" (agendar/
   // declinar/marcar realizada): antes cualquier coordinador del depto Audiovisual veía
   // todas las líneas; ahora eso queda acotado a dirección (nivel≥4), admin, o quien
-  // tenga explícitamente audiovisual.ver_todo (configurable en Empresa → Permisos —
-  // sembrado por defecto solo para Lizdania). Sin línea propia, `pautasInScope`/
-  // `scopedClients` igual muestran todo (comportamiento existente, sin cambios).
+  // tenga explícitamente audiovisual.ver_todo o audiovisual.piezas (configurable en
+  // Empresa → Permisos — sembradas por defecto para Lizdania y el depto Audiovisual
+  // respectivamente). Sin línea propia, `pautasInScope`/`scopedClients` igual muestran
+  // todo (comportamiento existente, sin cambios).
   const canViewAll =
-    userProfile?.access_level >= 4 || userProfile?.admin === true || can('audiovisual.ver_todo')
+    userProfile?.access_level >= 4 ||
+    userProfile?.admin === true ||
+    can('audiovisual.ver_todo') ||
+    can('audiovisual.piezas')
 
   const [{ year, month }, setPeriod] = useState(currentYearMonth)
   const [pautas, setPautas] = useState([])
@@ -423,7 +433,7 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
           usersById={usersById}
           audiovisualUsers={editorOptions}
           piezas={piezas.filter((pz) => pz.pauta_id === detailPauta.id)}
-          canCoordinate={canCoordinate}
+          canEditPiezas={canEditPiezas}
           companyId={companyId}
           onFields={handlePautaFields}
           onPiezaChanged={handlePiezaChanged}

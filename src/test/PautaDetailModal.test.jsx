@@ -3,7 +3,7 @@
  * (calendario o tabla de seguimiento). Cubre: renderiza la info esperada, ya no usa emojis
  * literales como iconos (reemplazados por SVG), cierra al click en la ✕, y — para pautas
  * 'realizada' — muestra el checklist de piezas agrupado por editor, editable solo si
- * `canCoordinate`.
+ * `canEditPiezas`.
  */
 import { render, screen, fireEvent } from '@testing-library/react'
 import { vi } from 'vitest'
@@ -53,7 +53,7 @@ function baseProps(overrides = {}) {
     usersById: USERS_BY_ID,
     audiovisualUsers: AUDIOVISUAL_USERS,
     piezas: [],
-    canCoordinate: true,
+    canEditPiezas: true,
     companyId: 'c1',
     onFields: vi.fn(),
     onPiezaChanged: vi.fn(),
@@ -146,7 +146,7 @@ describe('PautaDetailModal', () => {
     expect(screen.getByText(/1 de 3 piezas repartidas/)).toBeInTheDocument()
   })
 
-  it('sin canCoordinate, el checklist es de solo lectura (sin inputs de texto ni AttendeePicker)', () => {
+  it('sin canEditPiezas, el checklist es de solo lectura (sin inputs de texto ni AttendeePicker)', () => {
     const piezas = [
       {
         id: 'pz1',
@@ -162,7 +162,7 @@ describe('PautaDetailModal', () => {
         {...baseProps({
           pauta: pauta({ status: 'realizada', piezas_totales: 1 }),
           piezas,
-          canCoordinate: false,
+          canEditPiezas: false,
         })}
       />,
     )
@@ -388,7 +388,7 @@ describe('PautaDetailModal', () => {
       expect(mockUpdatePieza).toHaveBeenCalledWith('pz1', { formato: 'F' })
     })
 
-    it('sin canCoordinate, el formato de la pieza se muestra como texto, no como selector', () => {
+    it('sin canEditPiezas, el formato de la pieza se muestra como texto, no como selector', () => {
       const piezas = [
         {
           id: 'pz1',
@@ -405,7 +405,7 @@ describe('PautaDetailModal', () => {
           {...baseProps({
             pauta: pauta({ status: 'realizada', formats: ['R', 'F'], piezas_totales: 1 }),
             piezas,
-            canCoordinate: false,
+            canEditPiezas: false,
           })}
         />,
       )

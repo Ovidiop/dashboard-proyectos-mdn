@@ -40,7 +40,9 @@ const STATUS_BADGE = {
  * Cuando la pauta está 'realizada', además de la info de siempre se muestra la sección de
  * edición: piezas totales, editores asignados (AttendeePicker, igual que
  * recursos/asistentes en AvPhaseTable) y, debajo de cada uno, su checklist de piezas —
- * nombre editable + selector de estado (StatusPill).
+ * nombre editable + selector de estado (StatusPill). Editable por `canEditPiezas`
+ * (audiovisual.coordina O audiovisual.piezas — depto Audiovisual completo, no solo la
+ * coordinadora; ver AudiovisualView.jsx).
  *
  * Piezas totales/editadas tiene dos caminos según si la pauta marcó formatos (V/R/F):
  * - Con formatos: "salieron" por formato es manual (input); "editadas" por formato es
@@ -58,7 +60,7 @@ export default function PautaDetailModal({
   usersById,
   audiovisualUsers,
   piezas,
-  canCoordinate,
+  canEditPiezas,
   companyId,
   onFields,
   onPiezaChanged,
@@ -148,7 +150,7 @@ export default function PautaDetailModal({
               piezas={piezas}
               audiovisualUsers={audiovisualUsers}
               usersById={usersById}
-              canCoordinate={canCoordinate}
+              canEditPiezas={canEditPiezas}
               companyId={companyId}
               onFields={onFields}
               onPiezaChanged={onPiezaChanged}
@@ -189,7 +191,7 @@ function PiezasSection({
   piezas,
   audiovisualUsers,
   usersById,
-  canCoordinate,
+  canEditPiezas,
   companyId,
   onFields,
   onPiezaChanged,
@@ -329,7 +331,7 @@ function PiezasSection({
             {activeFormats.map((code) => (
               <div key={code} className="flex items-center gap-3">
                 <span className="text-[13px] text-[#333] flex-1">{FORMAT_LABELS[code]}</span>
-                {canCoordinate ? (
+                {canEditPiezas ? (
                   <label className="flex items-center gap-1.5">
                     <span className="text-[11px] text-[#999]">Salieron</span>
                     <input
@@ -369,7 +371,7 @@ function PiezasSection({
           <label className="block text-[11.5px] font-mono uppercase tracking-wide text-[#999] mb-1">
             Piezas totales
           </label>
-          {canCoordinate ? (
+          {canEditPiezas ? (
             <input
               type="number"
               min="0"
@@ -396,7 +398,7 @@ function PiezasSection({
         </div>
       )}
 
-      {canCoordinate && (
+      {canEditPiezas && (
         <div className="mb-4">
           <label className="block text-[11.5px] font-mono uppercase tracking-wide text-[#999] mb-1">
             Editores
@@ -419,7 +421,7 @@ function PiezasSection({
             key={editorId}
             editor={usersById.get(editorId)}
             piezas={grouped.get(editorId) ?? []}
-            canCoordinate={canCoordinate}
+            canEditPiezas={canEditPiezas}
             formatOptions={activeFormats}
             onAssignedChange={(n) => handleAssignedChange(editorId, n)}
             onPiezaChanged={onPiezaChanged}
@@ -431,7 +433,7 @@ function PiezasSection({
           <EditorChecklist
             editor={null}
             piezas={sinAsignar}
-            canCoordinate={canCoordinate}
+            canEditPiezas={canEditPiezas}
             formatOptions={activeFormats}
             onPiezaChanged={onPiezaChanged}
             onPiezaDeleted={onPiezaDeleted}
@@ -446,7 +448,7 @@ function PiezasSection({
 function EditorChecklist({
   editor,
   piezas,
-  canCoordinate,
+  canEditPiezas,
   formatOptions,
   onAssignedChange,
   onPiezaChanged,
@@ -470,7 +472,7 @@ function EditorChecklist({
         <span className="text-[12px] font-mono text-[#888]">
           {listas}/{total} listas
         </span>
-        {canCoordinate && editor && onAssignedChange && (
+        {canEditPiezas && editor && onAssignedChange && (
           <input
             type="number"
             min="0"
@@ -491,7 +493,7 @@ function EditorChecklist({
             <PiezaRow
               key={pz.id}
               pieza={pz}
-              canCoordinate={canCoordinate}
+              canEditPiezas={canEditPiezas}
               formatOptions={formatOptions}
               onChanged={onPiezaChanged}
               onDeleted={onPiezaDeleted}
@@ -504,7 +506,7 @@ function EditorChecklist({
   )
 }
 
-function PiezaRow({ pieza, canCoordinate, formatOptions, onChanged, onDeleted, onError }) {
+function PiezaRow({ pieza, canEditPiezas, formatOptions, onChanged, onDeleted, onError }) {
   async function handleStatusChange(next) {
     onError?.(null)
     const { data, error: err } = await updatePieza(pieza.id, { status: next })
@@ -537,7 +539,7 @@ function PiezaRow({ pieza, canCoordinate, formatOptions, onChanged, onDeleted, o
 
   return (
     <li className="flex items-center gap-2">
-      {canCoordinate ? (
+      {canEditPiezas ? (
         <input
           type="text"
           className="input-base input-compact flex-1"
@@ -558,7 +560,7 @@ function PiezaRow({ pieza, canCoordinate, formatOptions, onChanged, onDeleted, o
         <span className="text-[13px] text-[#333] flex-1">{pieza.nombre}</span>
       )}
       {formatOptions?.length > 1 &&
-        (canCoordinate ? (
+        (canEditPiezas ? (
           <select
             aria-label={`Formato de ${pieza.nombre}`}
             className="input-base input-compact text-[12px] flex-shrink-0"
@@ -582,11 +584,11 @@ function PiezaRow({ pieza, canCoordinate, formatOptions, onChanged, onDeleted, o
         value={pieza.status}
         meta={PIEZA_STATUS_META}
         options={PIEZA_STATUS_ORDER}
-        editable={canCoordinate}
+        editable={canEditPiezas}
         onChange={handleStatusChange}
         size="sm"
       />
-      {canCoordinate && (
+      {canEditPiezas && (
         <button
           type="button"
           onClick={handleDelete}
