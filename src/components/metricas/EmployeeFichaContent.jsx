@@ -1,5 +1,6 @@
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
+import { canViewEmployeeFicha } from '../../lib/permissions'
 
 /**
  * Cuerpo embebible de la ficha de un empleado (users). Sin overlay, botón X
@@ -11,23 +12,33 @@ import { useAuth } from "../../context/AuthContext";
  *   onClose  — cierre total del modal contenedor (para acciones close-then-navigate)
  */
 export default function EmployeeFichaContent({ employee, line, onClose }) {
-  const navigate = useNavigate();
-  const { can = () => true } = useAuth();
+  const navigate = useNavigate()
+  const { can = () => true, userProfile } = useAuth()
 
-  const initials = `${employee.first_name?.[0] ?? ""}${employee.last_name?.[0] ?? ""}`.toUpperCase();
-  const fullName = `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim();
-
-  function fmtDate(dateStr) {
-    if (!dateStr) return "—";
-    const [y, m, d] = dateStr.split("-");
-    return `${d}/${m}/${y}`;
+  if (!canViewEmployeeFicha(userProfile, employee.user_id)) {
+    return (
+      <div className="flex-1 flex items-center justify-center px-6 py-16">
+        <p className="text-[13.5px] text-[#bbb] text-center">
+          No tienes permiso para ver la ficha de esta persona.
+        </p>
+      </div>
+    )
   }
 
-  const ACCESS_LABELS = { 1: "Nivel 1", 2: "Nivel 2", 3: "Nivel 3", 4: "Nivel 4" };
-  const accessLabel = ACCESS_LABELS[employee.access_level] ?? `Nivel ${employee.access_level}`;
+  const initials = `${employee.first_name?.[0] ?? ''}${employee.last_name?.[0] ?? ''}`.toUpperCase()
+  const fullName = `${employee.first_name ?? ''} ${employee.last_name ?? ''}`.trim()
 
-  const positionFunctions = employee.position?.position_functions ?? [];
-  const positionDescription = employee.position?.position_description ?? null;
+  function fmtDate(dateStr) {
+    if (!dateStr) return '—'
+    const [y, m, d] = dateStr.split('-')
+    return `${d}/${m}/${y}`
+  }
+
+  const ACCESS_LABELS = { 1: 'Nivel 1', 2: 'Nivel 2', 3: 'Nivel 3', 4: 'Nivel 4' }
+  const accessLabel = ACCESS_LABELS[employee.access_level] ?? `Nivel ${employee.access_level}`
+
+  const positionFunctions = employee.position?.position_functions ?? []
+  const positionDescription = employee.position?.position_description ?? null
 
   return (
     <>
@@ -43,7 +54,7 @@ export default function EmployeeFichaContent({ employee, line, onClose }) {
         ) : (
           <div
             className="w-24 h-24 rounded-full flex items-center justify-center text-[32px] font-bold text-white shadow-md mb-3 flex-shrink-0"
-            style={{ background: line?.color ?? "#888" }}
+            style={{ background: line?.color ?? '#888' }}
           >
             {initials}
           </div>
@@ -52,14 +63,16 @@ export default function EmployeeFichaContent({ employee, line, onClose }) {
         {/* Nombre y cargo */}
         <h2 className="text-[20px] font-bold text-[#111] text-center leading-snug">{fullName}</h2>
         {employee.position?.position_name && (
-          <p className="text-[14px] text-[#888] text-center mt-0.5">{employee.position.position_name}</p>
+          <p className="text-[14px] text-[#888] text-center mt-0.5">
+            {employee.position.position_name}
+          </p>
         )}
 
         {/* Badge de línea */}
         {line && (
           <span
             className="inline-block mt-2 px-3 py-0.5 rounded-full text-[12px] font-semibold"
-            style={{ background: line.color + "22", color: line.color }}
+            style={{ background: line.color + '22', color: line.color }}
           >
             {line.name}
           </span>
@@ -68,7 +81,6 @@ export default function EmployeeFichaContent({ employee, line, onClose }) {
 
       {/* Cuerpo */}
       <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
-
         {/* Departamento */}
         {employee.department?.department_name && (
           <InfoItem label="Departamento">{employee.department.department_name}</InfoItem>
@@ -145,18 +157,25 @@ export default function EmployeeFichaContent({ employee, line, onClose }) {
         )}
 
         {/* Acciones */}
-        {can("evaluaciones") && (
+        {can('evaluaciones') && (
           <div className="pt-1 border-t border-[#ece9df]">
             <button
               type="button"
               onClick={() => {
-                onClose();
-                navigate(`/evaluaciones/empleado/${employee.user_id}`);
+                onClose()
+                navigate(`/evaluaciones/empleado/${employee.user_id}`)
               }}
               className="flex items-center gap-2 text-[14px] font-semibold text-[#555] hover:text-[#111] transition-colors"
             >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round"/>
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               Ver perfil completo
             </button>
@@ -164,14 +183,16 @@ export default function EmployeeFichaContent({ employee, line, onClose }) {
         )}
       </div>
     </>
-  );
+  )
 }
 
 function InfoItem({ label, children }) {
   return (
     <div>
-      <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-0.5">{label}</p>
-      <div className="text-[14px] text-[#555]">{children ?? "—"}</div>
+      <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-0.5">
+        {label}
+      </p>
+      <div className="text-[14px] text-[#555]">{children ?? '—'}</div>
     </div>
-  );
+  )
 }

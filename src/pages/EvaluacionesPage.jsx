@@ -100,7 +100,13 @@ export default function EvaluacionesPage() {
         {isProfileView ? (
           <EmployeeProfileView employeeId={employeeId} />
         ) : isMiDesempenoView ? (
-          <MiDesempenoView userId={userProfile.user_id} companyId={userProfile.company_id} />
+          <MiDesempenoView
+            userId={userProfile.user_id}
+            companyId={userProfile.company_id}
+            positionId={userProfile.position_id}
+            employee={userProfile}
+            cargoLabel={userProfile.position?.position_name}
+          />
         ) : isHistorialView ? (
           <HistorialLegacyView companyId={userProfile.company_id} />
         ) : (

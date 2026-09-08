@@ -183,6 +183,16 @@ export default function MonthPeriodPicker({ value, onChange }) {
           <path d={CHEVRON_RIGHT} strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
+
+      {value !== thisMonthStr() && (
+        <button
+          type="button"
+          onClick={() => onChange(thisMonthStr())}
+          className="px-2.5 py-1.5 rounded-lg text-[12.5px] font-semibold text-[#888] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors whitespace-nowrap"
+        >
+          Mes actual
+        </button>
+      )}
     </div>
   )
 }

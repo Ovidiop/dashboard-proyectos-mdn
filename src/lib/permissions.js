@@ -62,6 +62,23 @@ export function isFinancePrivileged(userProfile, hasCapability = false) {
   return userProfile?.admin === true || (userProfile?.access_level ?? 0) >= 3 || hasCapability
 }
 
+/**
+ * ¿Puede este usuario ver la ficha de un empleado (correo, teléfono, fecha de
+ * ingreso, cumpleaños, nivel de acceso)?
+ * Nivel de acceso ≥ 3 o admin → la ficha de cualquiera.
+ * Nivel 1-2 → únicamente la propia.
+ *
+ * @param {object|null} userProfile — objeto del contexto Auth
+ * @param {string|undefined} targetUserId — user_id del empleado cuya ficha se quiere ver
+ * @returns {boolean}
+ */
+export function canViewEmployeeFicha(userProfile, targetUserId) {
+  if (!userProfile) return false
+  if (userProfile.admin === true) return true
+  if ((userProfile.access_level ?? 0) >= 3) return true
+  return !!targetUserId && userProfile.user_id === targetUserId
+}
+
 export function canAccessModule(moduleKey, userProfile, configByModule) {
   if (!userProfile) return false
   if (userProfile.admin === true) return true // admin ve todo, incluso si está en deny

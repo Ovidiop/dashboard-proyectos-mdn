@@ -38,6 +38,7 @@ const MODALS_WITH_FOOTER = [
   'src/components/ads/AdsDetail.jsx',
   'src/components/ads/AdsSpendDetail.jsx',
   'src/components/pautas/PautaDetailModal.jsx',
+  'src/components/evaluaciones/ManagerRatingModal.jsx',
 ]
 
 // ── Casos: modales con header fijo pero sin footer de acciones separado ────────
@@ -47,6 +48,7 @@ const MODALS_HEADER_ONLY = [
   'src/components/reuniones/CalendarView.jsx',
   'src/components/tickets/TicketDetail.jsx',
   'src/components/ads/AdsBudgetOverview.jsx',
+  'src/components/evaluaciones/EmployeeScoreModal.jsx',
 ]
 
 // ── Casos: "cuerpo embebible" sin overlay propio (fragment). Su `flex flex-col`

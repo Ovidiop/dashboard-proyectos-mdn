@@ -505,6 +505,61 @@ describe('LineFichaModal — drill-down en un solo modal', () => {
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
+// 2b. LineFichaModal — visibilidad de la ficha de empleado por nivel de acceso
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('LineFichaModal — visibilidad de la ficha de empleado (nivel 1-2 vs propia)', () => {
+  it('nivel 2 sobre OTRO miembro: la tarjeta no abre la ficha (queda deshabilitada)', async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      userProfile: { user_id: 'u-3', company_id: 'co-1', access_level: 2, admin: false },
+      can: () => true,
+      signOut: vi.fn(),
+    })
+    await renderFicha()
+    const card = screen.getByTitle('María González')
+    expect(card).toBeDisabled()
+    await userEvent.click(card)
+    // Sigue en la vista raíz: no se filtró ningún dato de la ficha
+    expect(screen.getByText('Miembros')).toBeInTheDocument()
+    expect(screen.queryByText('maria@mdn.com')).not.toBeInTheDocument()
+    expect(screen.queryByText('Nivel de acceso')).not.toBeInTheDocument()
+  })
+
+  it('nivel 2 sobre SU PROPIA tarjeta: la ficha se abre completa', async () => {
+    // MOCK_EMPLOYEE (u-2) es el propio usuario logueado en este caso
+    vi.mocked(useAuth).mockReturnValue({
+      userProfile: { user_id: 'u-2', company_id: 'co-1', access_level: 2, admin: false },
+      can: () => true,
+      signOut: vi.fn(),
+    })
+    await renderFicha()
+    await userEvent.click(screen.getByTitle('Ver información de María González'))
+    expect(screen.getByText('maria@mdn.com')).toBeInTheDocument()
+    expect(screen.getByText('Nivel de acceso')).toBeInTheDocument()
+  })
+
+  it('admin/nivel ≥3: el comportamiento actual de drill-down completo se mantiene', async () => {
+    // renderFicha usa por defecto admin: true — ya cubierto en el describe de arriba,
+    // esta prueba deja explícito que no hay regresión con el nuevo gate.
+    await renderFicha()
+    await userEvent.click(screen.getByTitle('Ver información de María González'))
+    expect(screen.getByText('maria@mdn.com')).toBeInTheDocument()
+    expect(screen.getByText('Nivel de acceso')).toBeInTheDocument()
+  })
+
+  it('en vista Lista, la fila de otro miembro también queda deshabilitada para nivel 2', async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      userProfile: { user_id: 'u-3', company_id: 'co-1', access_level: 2, admin: false },
+      can: () => true,
+      signOut: vi.fn(),
+    })
+    await renderFicha()
+    await userEvent.click(screen.getAllByRole('button', { name: 'Lista' })[0])
+    expect(screen.getByTitle('María González')).toBeDisabled()
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
 // 3. LineFichaModal — toggle Lista/Tarjetas
 // ══════════════════════════════════════════════════════════════════════════════
 

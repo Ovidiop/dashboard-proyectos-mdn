@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { isFinancePrivileged } from '../../lib/permissions'
+import { isFinancePrivileged, canViewEmployeeFicha } from '../../lib/permissions'
 import { calcFinanzas, fmtUSD } from '../../utils/metricsFinance'
 import { MONTHS } from '../metricas/constants'
 import { loadCompanyEmployees, loadClients, loadYearReports } from '../metricas/metricsApi'
@@ -238,35 +238,46 @@ export default function LineFichaModal({
                         const isRemoving = removingId === u.user_id
                         const isLeader = line.lead_user_id === u.user_id
                         const isTogglingLeader = togglingLeaderId === u.user_id
+                        const visible = canViewEmployeeFicha(userProfile, u.user_id)
+                        const avatar = (
+                          <span
+                            className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 overflow-hidden"
+                            style={{ background: u.avatar_url ? undefined : line.color + '33' }}
+                          >
+                            {u.avatar_url ? (
+                              <img
+                                src={u.avatar_url}
+                                alt={name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <span style={{ color: line.color }}>
+                                {`${u.first_name?.[0] ?? ''}${u.last_name?.[0] ?? ''}`.toUpperCase()}
+                              </span>
+                            )}
+                          </span>
+                        )
                         return (
                           <div
                             key={u.user_id}
                             className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-xl bg-[#faf9f5] border border-[#ece9df] hover:border-[#d8d4c6] transition-colors"
                           >
-                            <button
-                              type="button"
-                              onClick={() => setDrill({ type: 'employee', entity: u })}
-                              className="flex items-center gap-2 text-left"
-                              title={`Ver información de ${name}`}
-                            >
-                              <span
-                                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 overflow-hidden"
-                                style={{ background: u.avatar_url ? undefined : line.color + '33' }}
+                            {visible ? (
+                              <button
+                                type="button"
+                                onClick={() => setDrill({ type: 'employee', entity: u })}
+                                className="flex items-center gap-2 text-left"
+                                title={`Ver información de ${name}`}
                               >
-                                {u.avatar_url ? (
-                                  <img
-                                    src={u.avatar_url}
-                                    alt={name}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <span style={{ color: line.color }}>
-                                    {`${u.first_name?.[0] ?? ''}${u.last_name?.[0] ?? ''}`.toUpperCase()}
-                                  </span>
-                                )}
+                                {avatar}
+                                <span className="text-[13px] font-medium text-[#333]">{name}</span>
+                              </button>
+                            ) : (
+                              <span className="flex items-center gap-2" title={name}>
+                                {avatar}
+                                <span className="text-[13px] font-medium text-[#333]">{name}</span>
                               </span>
-                              <span className="text-[13px] font-medium text-[#333]">{name}</span>
-                            </button>
+                            )}
                             {(onSetLeader || onRemoveLeader) && (
                               <button
                                 type="button"
@@ -332,6 +343,7 @@ export default function LineFichaModal({
                     <EntityGridList
                       items={members.map((u) => {
                         const name = `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim()
+                        const visible = canViewEmployeeFicha(userProfile, u.user_id)
                         return {
                           id: u.user_id,
                           name,
@@ -340,7 +352,8 @@ export default function LineFichaModal({
                           fallbackText:
                             `${u.first_name?.[0] ?? ''}${u.last_name?.[0] ?? ''}`.toUpperCase(),
                           fallbackBg: line.color,
-                          title: `Ver información de ${name}`,
+                          title: visible ? `Ver información de ${name}` : name,
+                          disabled: !visible,
                           raw: u,
                         }
                       })}

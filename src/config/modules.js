@@ -125,6 +125,10 @@ export const MODULES = [
       { key: 'evaluaciones.ver_todo', label: 'Ver el desempeño de todos los empleados + ranking' },
       { key: 'evaluaciones.recalcular', label: 'Recalcular el desempeño de un mes cerrado' },
       { key: 'evaluaciones.perfiles.manage', label: 'Configurar los perfiles de peso por cargo' },
+      {
+        key: 'evaluaciones.evaluar',
+        label: 'Evaluar mensualmente los criterios subjetivos por cargo',
+      },
     ],
   },
   {

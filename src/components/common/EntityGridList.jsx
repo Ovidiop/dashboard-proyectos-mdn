@@ -10,10 +10,10 @@ export function ViewToggle({ view, onChange }) {
     <div className="flex bg-[#f5f3eb] border border-[#e0ddd4] rounded-lg p-0.5">
       <button
         type="button"
-        onClick={() => onChange("lista")}
-        aria-pressed={view === "lista"}
+        onClick={() => onChange('lista')}
+        aria-pressed={view === 'lista'}
         className={`px-2.5 py-1 rounded-md text-[12px] font-semibold transition-all ${
-          view === "lista" ? "bg-white text-[#111] shadow-sm" : "text-[#888] hover:text-[#555]"
+          view === 'lista' ? 'bg-white text-[#111] shadow-sm' : 'text-[#888] hover:text-[#555]'
         }`}
         title="Vista lista"
       >
@@ -21,17 +21,17 @@ export function ViewToggle({ view, onChange }) {
       </button>
       <button
         type="button"
-        onClick={() => onChange("tarjetas")}
-        aria-pressed={view === "tarjetas"}
+        onClick={() => onChange('tarjetas')}
+        aria-pressed={view === 'tarjetas'}
         className={`px-2.5 py-1 rounded-md text-[12px] font-semibold transition-all ${
-          view === "tarjetas" ? "bg-white text-[#111] shadow-sm" : "text-[#888] hover:text-[#555]"
+          view === 'tarjetas' ? 'bg-white text-[#111] shadow-sm' : 'text-[#888] hover:text-[#555]'
         }`}
         title="Vista tarjetas"
       >
         Tarjetas
       </button>
     </div>
-  );
+  )
 }
 
 /** Avatar/logo circular con fallback de texto. fallbackBg null → estilo gris (marcas). */
@@ -43,7 +43,7 @@ function EntityAvatar({ item, sizeClass, textClass }) {
         alt={item.name}
         className={`${sizeClass} rounded-full object-cover flex-shrink-0 border border-[#e0ddd4]`}
       />
-    );
+    )
   }
   if (item.fallbackBg) {
     return (
@@ -53,13 +53,15 @@ function EntityAvatar({ item, sizeClass, textClass }) {
       >
         {item.fallbackText}
       </div>
-    );
+    )
   }
   return (
-    <span className={`${sizeClass} rounded-full bg-[#f0ede3] flex items-center justify-center flex-shrink-0 ${textClass} font-bold text-[#aaa] uppercase`}>
+    <span
+      className={`${sizeClass} rounded-full bg-[#f0ede3] flex items-center justify-center flex-shrink-0 ${textClass} font-bold text-[#aaa] uppercase`}
+    >
       {item.fallbackText}
     </span>
-  );
+  )
 }
 
 /**
@@ -74,17 +76,20 @@ export default function EntityGridList({
   items,
   view,
   onItemClick,
-  gridClass = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2",
+  gridClass = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2',
 }) {
-  if (view === "tarjetas") {
+  if (view === 'tarjetas') {
     return (
       <div className={gridClass}>
-        {items.map(item => (
+        {items.map((item) => (
           <button
             key={item.id}
             type="button"
-            onClick={() => onItemClick(item.raw)}
-            className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-xl border border-[#e0ddd4] bg-[#faf9f5] hover:bg-[#f0ede3] hover:border-[#d0ccc0] transition-colors text-center"
+            disabled={item.disabled}
+            onClick={() => !item.disabled && onItemClick(item.raw)}
+            className={`flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-xl border border-[#e0ddd4] bg-[#faf9f5] text-center transition-colors ${
+              item.disabled ? 'cursor-default' : 'hover:bg-[#f0ede3] hover:border-[#d0ccc0]'
+            }`}
             title={item.title}
           >
             <EntityAvatar item={item} sizeClass="w-10 h-10" textClass="text-[13px]" />
@@ -97,17 +102,20 @@ export default function EntityGridList({
           </button>
         ))}
       </div>
-    );
+    )
   }
 
   return (
     <div className="space-y-2">
-      {items.map(item => (
+      {items.map((item) => (
         <button
           key={item.id}
           type="button"
-          onClick={() => onItemClick(item.raw)}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-[#e0ddd4] hover:bg-[#fafaf7] hover:border-[#d0ccc0] transition-colors text-left"
+          disabled={item.disabled}
+          onClick={() => !item.disabled && onItemClick(item.raw)}
+          className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-[#e0ddd4] text-left transition-colors ${
+            item.disabled ? 'cursor-default' : 'hover:bg-[#fafaf7] hover:border-[#d0ccc0]'
+          }`}
           title={item.title}
         >
           <EntityAvatar item={item} sizeClass="w-8 h-8" textClass="text-[12px]" />
@@ -118,13 +126,18 @@ export default function EntityGridList({
             )}
           </div>
           <svg
-            width="10" height="10" viewBox="0 0 10 10" fill="none"
-            stroke="currentColor" strokeWidth="1.8" className="text-[#ccc] flex-shrink-0"
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            className="text-[#ccc] flex-shrink-0"
           >
-            <path d="M2 5h6M5 2l3 3-3 3" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M2 5h6M5 2l3 3-3 3" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
       ))}
     </div>
-  );
+  )
 }

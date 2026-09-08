@@ -19,6 +19,12 @@ import { currentMonthIndex, monthIndex } from '../components/tareas/constants'
  * que el resto del sistema) para no depender de qué modo trajo el score — así los
  * componentes no tienen que distinguir la forma de los datos según el mes.
  *
+ * `prevScores` trae el score automático (0-100) del mes inmediatamente anterior, si
+ * quedó congelado — para pintar la variación mes contra mes en la tabla de Desempeño
+ * sin volver a llamar la RPC pesada. Solo cubre meses ya cerrados; si el anterior
+ * tampoco tiene snapshot (poco común, backfill pendiente), el empleado no aparece en
+ * el mapa y no se muestra flecha de variación para él.
+ *
  * @param {{year:number, month:number}} period  month 1-indexado
  */
 export function useEmployeeScores({ year, month }) {
@@ -28,6 +34,7 @@ export function useEmployeeScores({ year, month }) {
     scores: new Map(),
     users: [],
     isSnapshot: false,
+    prevScores: new Map(),
   })
 
   const monthIdx = useMemo(() => monthIndex(new Date(year, month - 1, 1)), [year, month])
@@ -40,7 +47,7 @@ export function useEmployeeScores({ year, month }) {
       const { data, error } = await supabase
         .from('users')
         .select(
-          'user_id, first_name, last_name, avatar_url, access_level, department_id, position_id, deleted_at',
+          'user_id, first_name, last_name, avatar_url, access_level, department_id, position_id, deleted_at, position:positions(position_name)',
         )
         .is('deleted_at', null)
       if (error) throw error
@@ -100,11 +107,8 @@ export function useEmployeeScores({ year, month }) {
       return byUser
     }
 
-    async function loadLiveScores() {
-      const [rpcRes, historyByUser] = await Promise.all([
-        supabase.rpc('employee_score_inputs', { p_year: year, p_month: month }),
-        loadHistoryByUser(),
-      ])
+    async function loadLiveScores(historyByUser) {
+      const rpcRes = await supabase.rpc('employee_score_inputs', { p_year: year, p_month: month })
       if (rpcRes.error) throw rpcRes.error
       const data = rpcRes.data
       const rpcUsers = data.users ?? []
@@ -122,7 +126,7 @@ export function useEmployeeScores({ year, month }) {
     async function run() {
       setState((s) => ({ ...s, loading: true, error: null }))
       try {
-        const users = await loadUsers()
+        const [users, historyByUser] = await Promise.all([loadUsers(), loadHistoryByUser()])
         let scores = null
         let isSnapshot = false
         if (!isCurrentMonth) {
@@ -130,10 +134,20 @@ export function useEmployeeScores({ year, month }) {
           isSnapshot = scores != null
         }
         if (!scores) {
-          scores = await loadLiveScores()
+          scores = await loadLiveScores(historyByUser)
+        }
+        // Score del mes inmediatamente anterior, para la flecha de variación — ya
+        // viajó en `historyByUser` (se pide igual para la narrativa), no es un
+        // roundtrip nuevo en el camino "live"; en el camino "snapshot" (mes
+        // cerrado) sí agrega esta consulta, que antes no se hacía.
+        const [prevPeriod] = priorPeriods(year, month, 1)
+        const prevScores = new Map()
+        for (const [userId, list] of historyByUser) {
+          const prev = list.find((h) => h.year === prevPeriod.year && h.month === prevPeriod.month)
+          if (prev) prevScores.set(userId, prev.score)
         }
         if (!cancelled) {
-          setState({ loading: false, error: null, scores, users, isSnapshot })
+          setState({ loading: false, error: null, scores, users, isSnapshot, prevScores })
         }
       } catch (err) {
         if (!cancelled) {

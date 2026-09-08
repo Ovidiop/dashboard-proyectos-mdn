@@ -8,6 +8,7 @@ import ClientsView from '../components/empresa/ClientsView'
 import LinesView from '../components/empresa/LinesView'
 import PermisosView from '../components/empresa/PermisosView'
 import ScoreProfilesPanel from '../components/empresa/ScoreProfilesPanel'
+import CriteriaByPositionPanel from '../components/empresa/CriteriaByPositionPanel'
 
 // `capability` opcional: por defecto un tab se gatea con `empresa.<key>`, pero
 // "Perfiles de Desempeño" pertenece conceptualmente a Evaluaciones (mismo esquema de
@@ -123,7 +124,23 @@ export default function EmpresaPage() {
         )}
 
         {activeKey === 'desempeno-perfiles' && can('evaluaciones.perfiles.manage') && (
-          <ScoreProfilesPanel companyId={userProfile.company_id} userId={userProfile.user_id} />
+          <div className="space-y-10">
+            <div>
+              <h2 className="text-[15.5px] font-bold text-[#111] mb-3">
+                Pesos del score automático
+              </h2>
+              <ScoreProfilesPanel companyId={userProfile.company_id} userId={userProfile.user_id} />
+            </div>
+            <div>
+              <h2 className="text-[15.5px] font-bold text-[#111] mb-3">
+                Criterios de la evaluación del jefe
+              </h2>
+              <CriteriaByPositionPanel
+                companyId={userProfile.company_id}
+                userId={userProfile.user_id}
+              />
+            </div>
+          </div>
         )}
 
         {activeKey === 'permisos' && can('empresa.permisos') && (

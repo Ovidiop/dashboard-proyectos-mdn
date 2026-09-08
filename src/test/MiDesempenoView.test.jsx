@@ -1,20 +1,16 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
-import { createSupabaseMock } from './helpers/supabaseMock'
 
 vi.mock('../hooks/useEmployeeScores', () => ({
   useEmployeeScores: vi.fn(),
 }))
-
-// El panel operativo (tareas/proyectos/tareas fijas, portado de Mi Perfil v2 en
-// F6) hace su propia carga de supabase — sin companyId no dispara ninguna query,
-// así que estos tests (centrados en el score) no necesitan datos aquí.
-vi.mock('../supabase', () => ({
-  supabase: createSupabaseMock({}),
+vi.mock('../hooks/useManagerRatings', () => ({
+  useManagerRatings: vi.fn(),
 }))
 
 import { useEmployeeScores } from '../hooks/useEmployeeScores'
+import { useManagerRatings } from '../hooks/useManagerRatings'
 import MiDesempenoView from '../components/evaluaciones/MiDesempenoView'
 
 function renderView(props) {
@@ -66,18 +62,30 @@ function mockHook(overrides = {}) {
   })
 }
 
+beforeEach(() => {
+  useManagerRatings.mockReturnValue({
+    loading: false,
+    error: null,
+    criteriaByPosition: new Map(),
+    ratings: new Map(),
+    save: vi.fn(),
+    reload: vi.fn(),
+  })
+})
+
 describe('MiDesempenoView', () => {
   it('muestra el score y el desglose del empleado', () => {
     mockHook()
     renderView()
-    expect(screen.getByText('87.5')).toBeInTheDocument()
+    // score 87.5/100 → 4.4/5 (sin criterios de jefe, se muestra tal cual)
+    expect(screen.getByText('4.4')).toBeInTheDocument()
     expect(screen.getByText('Cumplimiento de entregas')).toBeInTheDocument()
   })
 
-  it('muestra un indicador que no aplica sin tratarlo como 0%', () => {
+  it('un indicador que no aplica al cargo (peso 0) no se lista', () => {
     mockHook()
     renderView()
-    expect(screen.getByText('No aplica a tu cargo')).toBeInTheDocument()
+    expect(screen.queryByText('Tickets IT en SLA')).not.toBeInTheDocument()
   })
 
   it('sin datos suficientes: no muestra un número engañoso', () => {
@@ -97,7 +105,8 @@ describe('MiDesempenoView', () => {
       ]),
     })
     renderView()
-    expect(screen.getByText(/Sin datos suficientes este mes/)).toBeInTheDocument()
+    expect(screen.getByText('sin datos')).toBeInTheDocument()
+    expect(screen.getByText(/Sin datos automáticos suficientes este mes/)).toBeInTheDocument()
   })
 
   it('muestra el spinner de carga', () => {
@@ -116,5 +125,12 @@ describe('MiDesempenoView', () => {
     mockHook({ isSnapshot: true })
     renderView()
     expect(screen.getByText(/Mes cerrado/)).toBeInTheDocument()
+  })
+
+  it('ya no muestra el panel operativo (Como responsable / Proyectos)', () => {
+    mockHook()
+    renderView()
+    expect(screen.queryByText(/Como responsable/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Proyectos')).not.toBeInTheDocument()
   })
 })
