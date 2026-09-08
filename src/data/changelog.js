@@ -12,6 +12,8 @@ export const CHANGELOG = [
     version: '1.2.0',
     title: 'Mejoras en Campañas y Empresa',
     changes: [
+      'MAPPI ahora sabe quién lleva cada cuenta (línea, jefa de línea, social media, diseñador y audiovisual asignados), puede buscar personas por cargo o departamento y responder cuánto se invierte en pauta pagada por cliente.',
+      'Corregido: algunas respuestas de MAPPI aparecían con un espacio o salto de línea en blanco antes del texto.',
       'Campañas y Ads ahora se ven por línea de negocio: elige una línea arriba o "Todos". Las jefas de línea ven su línea por defecto.',
       'En Campañas simplificamos los estados a Pendiente, En Curso y Finalizado.',
       'Cada Táctica puede tener un checklist de acciones; al ir tildándolas avanza su % de cumplimiento.',
@@ -193,6 +195,10 @@ export const CHANGELOG = [
       'Nuevo panel "Clientes por mes" en Empresa → Clientes: cuántas cuentas activas, altas y bajas hubo cada mes del año, con el detalle de cada baja.',
       'Las marcas ahora tienen RIF en su ficha y en el formulario de creación/edición.',
       'En Audiovisual → Solicitudes, quien pidió una pauta ya enviada ahora puede volver a editarla con el botón "Editar" (mientras siga pendiente de agendar). Solo puede hacerlo quien la creó.',
+      'Nuevo: Evaluaciones ahora calcula solo el desempeño de cada persona con lo que ya se registra en el día a día (tareas, CNP, tareas fijas, piezas audiovisuales, reuniones, campañas, chequeo y tickets de IT según el cargo). Ya no hace falta que un jefe se sienta a evaluar a nadie. Cada quien ve su propio puntaje en "Mi Desempeño"; los jefes de línea ven el de su equipo con ranking en "Desempeño"; y el análisis con IA ahora explica ese puntaje en vez de respuestas de un formulario.',
+      'El historial de las evaluaciones manuales anteriores queda disponible de solo lectura en la pestaña "Historial" de Evaluaciones — no se perdió ningún dato, pero ya no se pueden crear evaluaciones nuevas con ese método.',
+      'En Empresa se puede configurar cuánto pesa cada indicador del nuevo puntaje de desempeño según el cargo (por ejemplo, a un diseñador le pesa más la puntualidad que las reuniones).',
+      'El resumen de tu desempeño ya no sugiere ir a más reuniones como punto a mejorar, y ahora incluye cifras concretas, en qué mejoraste y cómo cambió tu puntaje respecto al mes anterior.',
     ],
   },
   {

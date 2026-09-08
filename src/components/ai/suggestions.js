@@ -5,4 +5,5 @@ export const SUGERENCIAS = [
   '¿Cómo va la empresa este mes?',
   '¿Qué línea va mejor?',
   '¿Hay tareas bloqueadas?',
+  '¿Quién lleva la cuenta de...?',
 ]

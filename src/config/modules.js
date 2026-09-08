@@ -117,12 +117,15 @@ export const MODULES = [
     routePrefix: '/evaluaciones',
     description: 'Evaluaciones de desempeño del equipo',
     tabs: [
-      { key: 'empleados', label: 'Empleados' },
-      { key: 'resumen', label: 'Resumen' },
-      { key: 'perfil', label: 'Mi Perfil' },
-      { key: 'perfil-v2', label: 'Mi Perfil v2' },
+      { key: 'mi-desempeno', label: 'Mi Desempeño' },
+      { key: 'desempeno', label: 'Desempeño' },
+      { key: 'historial', label: 'Historial (evaluaciones manuales, solo lectura)' },
     ],
-    manageActions: [{ key: 'evaluaciones.manage', label: 'Crear / guardar evaluaciones' }],
+    manageActions: [
+      { key: 'evaluaciones.ver_todo', label: 'Ver el desempeño de todos los empleados + ranking' },
+      { key: 'evaluaciones.recalcular', label: 'Recalcular el desempeño de un mes cerrado' },
+      { key: 'evaluaciones.perfiles.manage', label: 'Configurar los perfiles de peso por cargo' },
+    ],
   },
   {
     key: 'reportes',

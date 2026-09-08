@@ -1,8 +1,9 @@
 /**
- * Tests de MiPerfilV2View — sección «Tareas Fijas» (cumplimiento de la grilla
- * semanal en las cuentas donde el empleado es social/diseñador).
- * Cubre: aparece solo cuando hay marcas relevantes, cumplimiento correcto
- * (excluye 'na'), y respeta el período seleccionado (mes actual vs histórico).
+ * Tests de MiDesempenoView — panel operativo, sección «Tareas Fijas» (cumplimiento
+ * de la grilla semanal en las cuentas donde el empleado es social/diseñador).
+ * Portado de MiPerfilV2View al retirar el flujo manual (ver ARQUITECTURA.md §2.7,
+ * fase F6). Cubre: aparece solo cuando hay marcas relevantes, cumplimiento correcto
+ * (excluye 'na'), y no cuenta marcas de cuentas donde el empleado no participa.
  */
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
@@ -46,38 +47,52 @@ vi.mock('../supabase', () => ({
   }),
 }))
 
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom')
-  return { ...actual, useOutletContext: () => ({}) }
-})
+vi.mock('../hooks/useEmployeeScores', () => ({
+  useEmployeeScores: () => ({
+    loading: false,
+    error: null,
+    scores: new Map([
+      [
+        USER_ID,
+        {
+          score: null,
+          estado: 'sin_datos',
+          breakdown: [],
+          disponibilidad: 1,
+          autoCirculoPct: null,
+          enRanking: false,
+        },
+      ],
+    ]),
+    users: [],
+    isSnapshot: false,
+    ranking: [],
+    isCurrentMonth: true,
+  }),
+}))
 
-import MiPerfilV2View from '../components/evaluaciones/MiPerfilV2View'
+import MiDesempenoView from '../components/evaluaciones/MiDesempenoView'
 
-function renderProfile() {
+function renderView() {
   return render(
     <MemoryRouter>
-      <MiPerfilV2View
-        userId={USER_ID}
-        companyId={COMPANY_ID}
-        userProfile={{ user_id: USER_ID, first_name: 'Ana', last_name: 'Pérez' }}
-        canEval={false}
-      />
+      <MiDesempenoView userId={USER_ID} companyId={COMPANY_ID} />
     </MemoryRouter>,
   )
 }
 
-describe('MiPerfilV2View — sección Tareas Fijas', () => {
+describe('MiDesempenoView — panel operativo, sección Tareas fijas', () => {
   beforeEach(() => {
     currentMarks = []
   })
 
   it('no muestra la sección si no hay marcas en las cuentas del empleado', async () => {
     currentMarks = []
-    renderProfile()
+    renderView()
     await waitFor(() => {
-      expect(screen.getByText(/sin tareas registradas/i)).toBeInTheDocument()
+      expect(screen.getByText(/Sin datos suficientes este mes/i)).toBeInTheDocument()
     })
-    expect(screen.queryByText(/Tareas fijas/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Tareas fijas —/i)).not.toBeInTheDocument()
   })
 
   it('muestra % de cumplimiento excluyendo "na"', async () => {
@@ -86,9 +101,9 @@ describe('MiPerfilV2View — sección Tareas Fijas', () => {
       mark({ task_key: 'artes', period_week: 1, status: 'no' }),
       mark({ task_key: 'calendario', period_week: 1, status: 'na' }),
     ]
-    renderProfile()
+    renderView()
     await waitFor(() => {
-      expect(screen.getByText(/Tareas fijas/i)).toBeInTheDocument()
+      expect(screen.getByText(/Tareas fijas —/i)).toBeInTheDocument()
     })
     // total=2 (na excluida), entregadas=1 → 50%
     expect(screen.getByText('50%')).toBeInTheDocument()
@@ -97,10 +112,10 @@ describe('MiPerfilV2View — sección Tareas Fijas', () => {
 
   it('ignora marcas de cuentas donde el empleado no participa', async () => {
     currentMarks = [mark({ client_id: 'c-2', task_key: 'grilla', status: 'si' })]
-    renderProfile()
+    renderView()
     await waitFor(() => {
-      expect(screen.getByText(/sin tareas registradas/i)).toBeInTheDocument()
+      expect(screen.getByText(/Sin datos suficientes este mes/i)).toBeInTheDocument()
     })
-    expect(screen.queryByText(/Tareas fijas/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Tareas fijas —/i)).not.toBeInTheDocument()
   })
 })

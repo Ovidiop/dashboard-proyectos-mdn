@@ -30,7 +30,6 @@ const MODALS_WITH_FOOTER = [
   'src/components/empresa/PositionModal.jsx',
   'src/components/empresa/NewEmployeeDialog.jsx',
   'src/components/empresa/QuestionModal.jsx',
-  'src/components/evaluaciones/EvaluationModal.jsx',
   'src/components/ads/AdsForm.jsx',
   'src/components/ads/AdsSpendForm.jsx',
   'src/components/ads/AdsResultsModal.jsx',

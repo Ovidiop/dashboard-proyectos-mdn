@@ -95,8 +95,48 @@ export function resolveLine(nombre, lines) {
     }
   }
   return {
-    error: `No se encontró la línea "${nombre}". Líneas disponibles: ${lines.map((l) => l.name).join(', ')}.`,
+    error: `No se encontró la línea "${nombre}". Líneas disponibles: ${lines.map((l) => l.name).join(', ')}. Si "${nombre}" es un cliente y no una línea, usa ficha_cliente.`,
   }
+}
+
+/**
+ * Resuelve un nombre de cliente/marca escrito en lenguaje natural contra la cartera de
+ * la empresa. Mismo patrón exacto→prefijo→substring que resolveLine, pero primero busca
+ * entre clientes activos y solo cae a los archivados si no hay match entre los activos
+ * (una marca dada de baja puede seguir teniendo historial que consultar).
+ */
+export function resolveClient(nombre, clients) {
+  const q = normalize(nombre)
+  if (!q) return { error: 'Falta indicar el nombre del cliente.' }
+
+  function matchIn(pool) {
+    const exact = pool.filter((c) => normalize(c.name) === q)
+    if (exact.length === 1) return { client: exact[0] }
+    const prefix = pool.filter((c) => normalize(c.name).startsWith(q))
+    if (prefix.length === 1) return { client: prefix[0] }
+    const substr = pool.filter((c) => normalize(c.name).includes(q))
+    if (substr.length === 1) return { client: substr[0] }
+    const candidates = prefix.length > 1 ? prefix : substr.length > 1 ? substr : []
+    if (candidates.length > 1) {
+      return {
+        ambiguous: `"${nombre}" es ambiguo, coincide con: ${candidates.map((c) => c.name).join(', ')}. Especifica cuál.`,
+      }
+    }
+    return null
+  }
+
+  const active = clients.filter((c) => !c.deleted_at)
+  const archived = clients.filter((c) => c.deleted_at)
+
+  const activeMatch = matchIn(active)
+  if (activeMatch?.ambiguous) return { error: activeMatch.ambiguous }
+  if (activeMatch) return activeMatch
+
+  const archivedMatch = matchIn(archived)
+  if (archivedMatch?.ambiguous) return { error: archivedMatch.ambiguous }
+  if (archivedMatch) return archivedMatch
+
+  return { error: `No se encontró el cliente "${nombre}".` }
 }
 
 /**
@@ -672,6 +712,249 @@ export function diasCargaAlta(args, dataset) {
   }
 }
 
+function positionNameOf(user, dataset) {
+  return dataset.positions.find((p) => p.position_id === user.position_id)?.position_name ?? null
+}
+
+function departmentNameOf(user, dataset) {
+  return (
+    dataset.departments.find((d) => d.department_id === user.department_id)?.department_name ?? null
+  )
+}
+
+/**
+ * Líneas a las que pertenece un empleado, con "(jefa)" si es la líder de esa línea. Si no
+ * tiene fila en metric_line_members en ninguna línea real (is_general/is_management
+ * excluidas: esas dos no tienen filas, su membresía es implícita), es del pool
+ * "Independiente" — o "Alta Gerencia" si su access_level es 4+ — mismo criterio que
+ * crossLineUserIds en src/utils/lineFilters.js.
+ */
+function linesOfUser(userId, dataset) {
+  const realLines = dataset.linesAll.filter((l) => !l.is_general && !l.is_management)
+  const memberLines = realLines.filter((l) => (l.member_user_ids ?? []).includes(userId))
+  if (memberLines.length) {
+    return memberLines.map((l) => {
+      const isLead = dataset.lineMembers.some(
+        (m) => m.line_id === l.id && m.user_id === userId && m.is_lead,
+      )
+      return isLead ? `${l.name} (jefa)` : l.name
+    })
+  }
+  const user = dataset.users.find((u) => u.user_id === userId)
+  return (user?.access_level ?? 0) >= 4 ? ['Alta Gerencia'] : ['Independiente']
+}
+
+function employeeCard(user, dataset) {
+  return {
+    nombre: fullNameOf(user),
+    cargo: positionNameOf(user, dataset),
+    departamento: departmentNameOf(user, dataset),
+    lineas: linesOfUser(user.user_id, dataset),
+  }
+}
+
+/** Catálogo de cargos con su departamento y cuántos empleados activos tiene cada uno. */
+export function listarCargos(_args, dataset) {
+  const counts = new Map()
+  for (const u of dataset.users) counts.set(u.position_id, (counts.get(u.position_id) ?? 0) + 1)
+  const cargos = dataset.positions
+    .map((p) => ({
+      cargo: p.position_name,
+      departamento:
+        dataset.departments.find((d) => d.department_id === p.department_id)?.department_name ??
+        null,
+      empleados: counts.get(p.position_id) ?? 0,
+    }))
+    .sort((a, b) => b.empleados - a.empleados || a.cargo.localeCompare(b.cargo))
+  return { cargos }
+}
+
+/** Directorio de empleados activos, filtrable por cargo (substring), departamento y línea. */
+export function buscarEmpleados(args, dataset) {
+  let scoped = dataset.users
+
+  if (args.linea) {
+    const { line, error } = resolveLine(args.linea, dataset.lines)
+    if (error) return { error }
+    const ids = new Set(line.member_user_ids ?? [])
+    scoped = scoped.filter((u) => ids.has(u.user_id))
+  }
+
+  if (args.departamento) {
+    const q = normalize(args.departamento)
+    const deptIds = new Set(
+      dataset.departments
+        .filter((d) => normalize(d.department_name).includes(q))
+        .map((d) => d.department_id),
+    )
+    if (!deptIds.size) {
+      return {
+        error: `No se encontró el departamento "${args.departamento}". Departamentos: ${dataset.departments.map((d) => d.department_name).join(', ')}.`,
+      }
+    }
+    scoped = scoped.filter((u) => deptIds.has(u.department_id))
+  }
+
+  if (args.cargo) {
+    const q = normalize(args.cargo)
+    const posIds = new Set(
+      dataset.positions
+        .filter((p) => normalize(p.position_name).includes(q))
+        .map((p) => p.position_id),
+    )
+    if (!posIds.size) {
+      return {
+        error: `No se encontró el cargo "${args.cargo}". Cargos existentes: ${dataset.positions.map((p) => p.position_name).join(', ')}.`,
+      }
+    }
+    scoped = scoped.filter((u) => posIds.has(u.position_id))
+  }
+
+  if (!scoped.length) {
+    return { error: 'No se encontraron empleados con esos filtros.' }
+  }
+
+  const items = scoped.slice(0, 60).map((u) => employeeCard(u, dataset))
+  return { total: scoped.length, mostrando: items.length, empleados: items }
+}
+
+function clientTeamMember(userId, dataset) {
+  if (!userId) return null
+  const user = dataset.users.find((u) => u.user_id === userId)
+  if (!user) return null
+  return { nombre: fullNameOf(user), cargo: positionNameOf(user, dataset) }
+}
+
+/**
+ * Ficha de un cliente/marca: línea que lo lleva (y su jefa), equipo asignado (social
+ * media, diseñador, audiovisual, apoyo), datos comerciales y estado del contrato.
+ */
+export function fichaCliente(args, dataset) {
+  const { client, error } = resolveClient(args.cliente, dataset.clients)
+  if (error) return { error }
+
+  const line = client.line_id ? dataset.linesAll.find((l) => l.id === client.line_id) : null
+  const jefaMember = line
+    ? dataset.lineMembers.find((m) => m.line_id === line.id && m.is_lead)
+    : null
+  const jefaUser = jefaMember ? dataset.users.find((u) => u.user_id === jefaMember.user_id) : null
+
+  const pendingLine = client.pending_line_id
+    ? dataset.linesAll.find((l) => l.id === client.pending_line_id)
+    : null
+
+  return {
+    cliente: client.name,
+    linea: line ? line.name : null,
+    jefa_de_linea: jefaUser ? fullNameOf(jefaUser) : null,
+    equipo: {
+      social_media: clientTeamMember(client.social_manager_id, dataset),
+      disenador: clientTeamMember(client.designer_id, dataset),
+      audiovisual: (client.audiovisual_ids ?? [])
+        .map((id) => clientTeamMember(id, dataset))
+        .filter(Boolean),
+      apoyo: (client.apoyo_ids ?? []).map((id) => clientTeamMember(id, dataset)).filter(Boolean),
+    },
+    cliente_desde: client.mdn_since ?? null,
+    aniversario: client.anniversary_date ?? null,
+    dia_de_pago: client.payment_day ?? null,
+    fee_mensual: client.monthly_fee != null ? round(Number(client.monthly_fee), 2) : null,
+    presupuesto_pauta_mensual:
+      client.campaign_budget != null ? round(Number(client.campaign_budget), 2) : null,
+    rif: client.rif ?? null,
+    website: client.website ?? null,
+    redes: client.social_links ?? [],
+    activo: !client.deleted_at,
+    contrato_hasta: client.contract_end ?? null,
+    motivo_fin_contrato: client.contract_end_reason ?? null,
+    cambio_de_linea_pendiente: pendingLine
+      ? { linea_nueva: pendingLine.name, desde: client.line_change_at ?? null }
+      : null,
+  }
+}
+
+/** Cartera de clientes de una línea: cuántos y cuáles, con su estado. */
+export function clientesDeLinea(args, dataset) {
+  const { line, error } = resolveLine(args.linea, dataset.lines)
+  if (error) return { error }
+
+  let clients = dataset.clients.filter((c) => c.line_id === line.id)
+  if (!args.incluir_archivados) clients = clients.filter((c) => !c.deleted_at)
+
+  return {
+    linea: line.name,
+    total: clients.length,
+    clientes: clients.map((c) => ({
+      nombre: c.name,
+      estado: c.deleted_at ? 'archivado' : 'activo',
+    })),
+  }
+}
+
+/**
+ * Suma de montos de pauta pagada (paid_campaigns) de un cliente cuyo start_date cae en el
+ * mes dado. Reimplementación mínima de spentByClientInPeriod
+ * (src/components/ads/campaignSpendApi.js, fuente de verdad) — no se importa ese módulo
+ * porque arrastra src/supabase.js (import.meta.env) al runtime de Netlify.
+ */
+function spentInPeriod(campaigns, clientId, year, month) {
+  const prefix = `${year}-${String(month).padStart(2, '0')}`
+  return campaigns
+    .filter((a) => a.client_id === clientId && a.start_date?.startsWith(prefix))
+    .reduce((sum, a) => sum + (Number(a.amount) || 0), 0)
+}
+
+/** Inversión en pauta pagada de un mes: de un cliente concreto, o ranking de toda la cartera. */
+export function inversionAds(args, dataset) {
+  const { year, month } =
+    args.mes && args.anio ? { year: args.anio, month: args.mes } : currentPeriod()
+  const prefix = `${year}-${String(month).padStart(2, '0')}`
+
+  if (args.cliente) {
+    const { client, error } = resolveClient(args.cliente, dataset.clients)
+    if (error) return { error }
+    const campaigns = dataset.campaigns.filter(
+      (a) => a.client_id === client.id && a.start_date?.startsWith(prefix),
+    )
+    return {
+      cliente: client.name,
+      periodo: `${MONTH_NAMES[month - 1]} ${year}`,
+      total_invertido: round(spentInPeriod(dataset.campaigns, client.id, year, month), 2),
+      presupuesto_mensual:
+        client.campaign_budget != null ? round(Number(client.campaign_budget), 2) : null,
+      campanas: campaigns.map((a) => ({
+        nombre: a.name,
+        monto: round(Number(a.amount) || 0, 2),
+        inicio: a.start_date,
+        fin: a.end_date,
+        estado: a.status,
+        responsable: userName(a.responsable_id, dataset),
+      })),
+    }
+  }
+
+  const byClient = new Map()
+  for (const a of dataset.campaigns) {
+    if (!a.start_date?.startsWith(prefix)) continue
+    byClient.set(a.client_id, (byClient.get(a.client_id) ?? 0) + (Number(a.amount) || 0))
+  }
+  const ranking = [...byClient.entries()]
+    .map(([clientId, monto]) => ({
+      cliente: dataset.clients.find((c) => c.id === clientId)?.name ?? '(cliente eliminado)',
+      monto: round(monto, 2),
+    }))
+    .sort((a, b) => b.monto - a.monto)
+
+  return {
+    periodo: `${MONTH_NAMES[month - 1]} ${year}`,
+    ranking,
+    total_empresa: round(
+      ranking.reduce((sum, r) => sum + r.monto, 0),
+      2,
+    ),
+  }
+}
+
 const monthProp = {
   type: 'integer',
   description: 'Mes 1-12. Si se omite junto con anio, se usa el último mes cerrado.',
@@ -693,6 +976,19 @@ const minimoProp = {
   type: 'integer',
   description:
     'Cantidad mínima de pautas en un mismo día para contar ese día (ej. "más de 2" → minimo: 3, "3 o más" → minimo: 3). Por defecto 3.',
+}
+const cargoProp = {
+  type: 'string',
+  description:
+    'Cargo/puesto tal como lo diría el usuario (ej. "social", "community", "diseñador"). Hace match parcial contra el catálogo real de cargos.',
+}
+const departamentoProp = {
+  type: 'string',
+  description: 'Departamento tal como lo diría el usuario (ej. "Redes", "Diseño", "Audiovisual").',
+}
+const clienteProp = {
+  type: 'string',
+  description: 'Nombre del cliente/marca tal como lo diría el usuario.',
 }
 
 export const TOOL_DECLARATIONS = [
@@ -865,6 +1161,67 @@ export const TOOL_DECLARATIONS = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'listar_cargos',
+    description:
+      'Catálogo de cargos/puestos de la empresa, con su departamento y cuántos empleados activos tiene cada uno. Úsala si buscar_empleados no encuentra un cargo, para ver cómo se llama realmente.',
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'buscar_empleados',
+    description:
+      'Directorio de personal: busca empleados activos por cargo, departamento y/o línea, cada uno con su nombre, cargo, departamento y línea(s). Úsala para "quién es el/la [cargo]", "lista de gente de [departamento/línea]" — nunca digas que no tienes acceso a un directorio de empleados. Sin filtros, devuelve toda la plantilla.',
+    parameters: {
+      type: 'object',
+      properties: { cargo: cargoProp, departamento: departamentoProp, linea: lineaProp },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'ficha_cliente',
+    description:
+      'Ficha de un cliente/marca: qué línea lo lleva y quién es la jefa, el equipo asignado (social media, diseñador, audiovisual, apoyo), desde cuándo es cliente, día de pago, fee mensual, presupuesto de pauta, RIF, redes y estado del contrato. Úsala siempre que pregunten "quién maneja/lleva la cuenta de X" — si "X" no es una línea conocida, es casi seguro un cliente: usa esta tool antes de decir que no existe.',
+    parameters: {
+      type: 'object',
+      properties: { cliente: clienteProp },
+      required: ['cliente'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'clientes_de_linea',
+    description:
+      'Cartera de clientes/marcas de una línea operativa: cuántos y cuáles, con su estado (activo/archivado).',
+    parameters: {
+      type: 'object',
+      properties: {
+        linea: lineaProp,
+        incluir_archivados: {
+          type: 'boolean',
+          description: 'Si se debe incluir clientes archivados. Por defecto false (solo activos).',
+        },
+      },
+      required: ['linea'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'inversion_ads',
+    description:
+      'Inversión en pauta pagada (ads) de un mes: con "cliente", el detalle de sus campañas, el total invertido y su presupuesto mensual; sin "cliente", el ranking de todos los clientes por inversión del mes y el total de la empresa. Sin mes/año, usa el mes actual. Es la ÚNICA fuente de inversión en ads: no proyectes ni extrapoles más allá de estos montos.',
+    parameters: {
+      type: 'object',
+      properties: {
+        cliente: {
+          ...clienteProp,
+          description: 'Opcional: si se omite, devuelve el ranking de todos los clientes.',
+        },
+        mes: monthProp,
+        anio: yearProp,
+      },
+      additionalProperties: false,
+    },
+  },
 ]
 
 const EXECUTORS = {
@@ -881,6 +1238,11 @@ const EXECUTORS = {
   resumen_pautas: resumenPautas,
   pautas_del_dia: pautasDelDia,
   dias_carga_alta: diasCargaAlta,
+  listar_cargos: listarCargos,
+  buscar_empleados: buscarEmpleados,
+  ficha_cliente: fichaCliente,
+  clientes_de_linea: clientesDeLinea,
+  inversion_ads: inversionAds,
 }
 
 /** Ejecuta una tool por nombre sobre el dataset cargado. Nunca lanza: errores van en `{error}`. */

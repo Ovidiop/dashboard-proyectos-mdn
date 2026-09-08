@@ -92,6 +92,17 @@ describe('ai-chat.js handler', () => {
     expect(payload.toolsUsed).toEqual([])
   })
 
+  it('recorta espacios/saltos de línea al inicio o final de la respuesta del modelo', async () => {
+    fetchMock.mockResolvedValue(
+      okResponse({ choices: [{ message: { content: '  \nTodo bien.\n  ' } }] }),
+    )
+    const res = await handler(
+      makeEvent({ messages: [{ role: 'user', text: '¿Cómo va la empresa?' }] }),
+    )
+    const payload = JSON.parse(res.body)
+    expect(payload.reply).toBe('Todo bien.')
+  })
+
   it('ejecuta una tool y reinyecta el turno del modelo tal cual antes de la respuesta final', async () => {
     const assistantMessage = {
       role: 'assistant',

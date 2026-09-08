@@ -7,7 +7,12 @@ import QuestionsView from '../components/empresa/QuestionsView'
 import ClientsView from '../components/empresa/ClientsView'
 import LinesView from '../components/empresa/LinesView'
 import PermisosView from '../components/empresa/PermisosView'
+import ScoreProfilesPanel from '../components/empresa/ScoreProfilesPanel'
 
+// `capability` opcional: por defecto un tab se gatea con `empresa.<key>`, pero
+// "Perfiles de Desempeño" pertenece conceptualmente a Evaluaciones (mismo esquema de
+// capabilities que el resto de ese módulo, ver ARQUITECTURA.md §2.7) aunque su UI vive
+// en Empresa junto a los otros ajustes de configuración organizacional.
 const ALL_TABS = [
   { key: 'general', label: 'Inicio', path: '/empresa' },
   { key: 'lineas', label: 'Líneas', path: '/empresa/lineas' },
@@ -15,14 +20,25 @@ const ALL_TABS = [
   { key: 'empleados', label: 'Empleados', path: '/empresa/empleados' },
   { key: 'preguntas', label: 'Preguntas', path: '/empresa/preguntas' },
   { key: 'clientes', label: 'Clientes', path: '/empresa/clientes' },
+  {
+    key: 'desempeno-perfiles',
+    label: 'Perfiles de Desempeño',
+    path: '/empresa/desempeno-perfiles',
+    capability: 'evaluaciones.perfiles.manage',
+  },
   { key: 'permisos', label: 'Permisos', path: '/empresa/permisos' },
 ]
+
+function tabCapability(key) {
+  return ALL_TABS.find((t) => t.key === key)?.capability ?? `empresa.${key}`
+}
 
 function pathToKey(pathname) {
   if (pathname.startsWith('/empresa/departamentos')) return 'departamentos'
   if (pathname.startsWith('/empresa/empleados')) return 'empleados'
   if (pathname.startsWith('/empresa/preguntas')) return 'preguntas'
   if (pathname.startsWith('/empresa/clientes')) return 'clientes'
+  if (pathname.startsWith('/empresa/desempeno-perfiles')) return 'desempeno-perfiles'
   if (pathname.startsWith('/empresa/lineas')) return 'lineas'
   if (pathname.startsWith('/empresa/permisos')) return 'permisos'
   return 'general'
@@ -34,13 +50,13 @@ export default function EmpresaPage() {
   const navigate = useNavigate()
 
   // Cada tab se muestra solo si el usuario tiene la capacidad correspondiente
-  const tabs = ALL_TABS.filter((t) => can(`empresa.${t.key}`))
+  const tabs = ALL_TABS.filter((t) => can(t.capability ?? `empresa.${t.key}`))
   const activeKey = pathToKey(location.pathname)
 
   // Redirigir si el usuario no tiene acceso a la ruta activa
   useEffect(() => {
     if (userProfile == null) return
-    if (!can(`empresa.${activeKey}`)) {
+    if (!can(tabCapability(activeKey))) {
       navigate('/empresa', { replace: true })
     }
   }, [activeKey, can, navigate, userProfile])
@@ -104,6 +120,10 @@ export default function EmpresaPage() {
 
         {activeKey === 'lineas' && can('empresa.lineas') && (
           <LinesView companyId={userProfile.company_id} canManage={can('empresa.lineas.manage')} />
+        )}
+
+        {activeKey === 'desempeno-perfiles' && can('evaluaciones.perfiles.manage') && (
+          <ScoreProfilesPanel companyId={userProfile.company_id} userId={userProfile.user_id} />
         )}
 
         {activeKey === 'permisos' && can('empresa.permisos') && (

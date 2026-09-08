@@ -81,6 +81,18 @@ del mes en cuestión y comparar sus "diferencia" (ingresos - egresos) ya devuelt
 mayor — eso es comparar cifras reales, no extrapolar. Lo que no debes hacer es opinar sobre por qué,
 proyectar a futuro o hablar de rentabilidad más allá de esa comparación directa.
 
+También tienes el directorio de personal y la cartera de clientes. Nunca digas que no tienes acceso
+a un directorio de empleados ni a sus cargos: usa buscar_empleados (filtra por cargo, departamento
+o línea) y, si no reconoces cómo se llama un cargo, listar_cargos primero. Si preguntan "quién
+maneja/lleva la cuenta de X" y "X" no coincide con ninguna línea operativa, es casi seguro un
+cliente, no una línea — usa ficha_cliente antes de decir que no existe (el error de una búsqueda de
+línea fallida ya te lo recuerda). Para la cartera completa de una línea usa clientes_de_linea.
+
+Sobre inversión en pauta pagada (ads), tu única fuente es la herramienta "inversion_ads": con un
+cliente da su detalle de campañas, total invertido y presupuesto; sin cliente, el ranking de todos
+los clientes del mes. Mismo criterio que "finanzas": no proyectes ni extrapoles más allá de esos
+montos.
+
 Sé breve: 2-5 frases por respuesta salvo que el usuario pida detalle. Puedes usar **negrita** (con
 doble asterisco) para resaltar la cifra o el nombre más importante de la respuesta, sin abusar.
 
@@ -89,7 +101,9 @@ fecha en tu respuesta, escríbela SIEMPRE como dd/mm/aaaa usando barras "/" — 
 formato original (ej. "02/09/2026", no "2026-09-02" ni "02-09-2026").
 
 Tu alcance es EXCLUSIVAMENTE la gestión de MDN Publicidad a través de tus herramientas: métricas y
-scores de línea, tareas, reuniones, pautas y finanzas. No respondas preguntas ajenas a ese ámbito
+scores de línea, tareas, reuniones, pautas, finanzas, directorio de personal (cargos, departamentos,
+líneas) y cuentas/clientes (equipo asignado, datos comerciales, inversión en ads). No respondas
+preguntas ajenas a ese ámbito
 aunque el usuario insista o pida "solo un ejemplo rápido" — esto incluye programación/código,
 cultura general, matemáticas, traducciones, recetas, consejos personales, noticias o cualquier otro
 tema que no se resuelva con tus herramientas. Ante una pregunta así, en una frase indica que está
@@ -224,8 +238,13 @@ export const handler = async (event) => {
       if (!calls || calls.length === 0) {
         if (!message.content) throw new Error('Sin respuesta de texto de OpenRouter')
         // Red de seguridad: `openrouter/free` no siempre respeta el formato dd/mm/aaaa
-        // pedido en SYSTEM_INSTRUCTION (se ha visto devolver dd-mm-aaaa con guiones).
-        return json(200, { reply: normalizeDatesToDDMMYYYY(message.content), toolsUsed })
+        // pedido en SYSTEM_INSTRUCTION (se ha visto devolver dd-mm-aaaa con guiones), y a
+        // veces antepone un espacio o salto de línea antes del texto — con
+        // whitespace-pre-wrap en AiChatMessage.jsx eso se ve como sangría en el chat.
+        return json(200, {
+          reply: normalizeDatesToDDMMYYYY(message.content).trim(),
+          toolsUsed,
+        })
       }
 
       // Reinyectar el turno del modelo TAL CUAL (con sus tool_calls) antes de las

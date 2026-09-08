@@ -16,6 +16,12 @@ import {
   pautasDelDia,
   resolveAudiovisualEmployee,
   diasCargaAlta,
+  resolveClient,
+  listarCargos,
+  buscarEmpleados,
+  fichaCliente,
+  clientesDeLinea,
+  inversionAds,
   executeTool,
   TOOL_DECLARATIONS,
 } from './aiChatTools.js'
@@ -135,6 +141,260 @@ describe('resolveLine', () => {
     const { error } = resolveLine('Alf', lines)
     expect(error).toMatch(/ambiguo/)
     expect(error).toMatch(/Alfa, Alfredo/)
+  })
+
+  it('sugiere ficha_cliente cuando el nombre no es una línea conocida (puede ser un cliente)', () => {
+    const { error } = resolveLine('Jugos Los Ángeles', LINES)
+    expect(error).toMatch(/ficha_cliente/)
+  })
+})
+
+const POSITIONS = [
+  { position_id: 1, position_name: 'Social Media Manager', department_id: 1 },
+  { position_id: 2, position_name: 'Community Manager', department_id: 1 },
+  { position_id: 3, position_name: 'Diseñador', department_id: 3 },
+]
+const DEPARTMENTS = [
+  { department_id: 1, department_name: 'Redes' },
+  { department_id: 2, department_name: 'Audiovisual' },
+  { department_id: 3, department_name: 'Diseño' },
+]
+const USERS_DIR = [
+  {
+    user_id: 'u1',
+    first_name: 'Ana',
+    last_name: 'Pérez',
+    department_id: 1,
+    position_id: 1,
+    access_level: 1,
+  },
+  {
+    user_id: 'u2',
+    first_name: 'Luis',
+    last_name: 'Gómez',
+    department_id: 1,
+    position_id: 2,
+    access_level: 1,
+  },
+  {
+    user_id: 'u3',
+    first_name: 'Marta',
+    last_name: 'Ruiz',
+    department_id: 3,
+    position_id: 3,
+    access_level: 1,
+  },
+  {
+    user_id: 'u4',
+    first_name: 'Carla',
+    last_name: 'Boss',
+    department_id: 1,
+    position_id: 1,
+    access_level: 4,
+  },
+]
+const LINES_ALL = [
+  {
+    id: 'l1',
+    name: 'Team Bianca',
+    is_general: false,
+    is_management: false,
+    member_user_ids: ['u1', 'u3'],
+  },
+  {
+    id: 'l2',
+    name: 'Team Sabrina',
+    is_general: false,
+    is_management: false,
+    member_user_ids: ['u2'],
+  },
+  { id: 'lg', name: 'Independientes', is_general: true, is_management: false, member_user_ids: [] },
+  { id: 'lm', name: 'Alta Gerencia', is_general: false, is_management: true, member_user_ids: [] },
+]
+const LINE_MEMBERS_DIR = [
+  { line_id: 'l1', user_id: 'u1', is_lead: true },
+  { line_id: 'l1', user_id: 'u3', is_lead: false },
+  { line_id: 'l2', user_id: 'u2', is_lead: true },
+]
+const CLIENTS_DIR = [
+  {
+    id: 'c1',
+    name: 'Jugos Los Ángeles',
+    line_id: 'l1',
+    deleted_at: null,
+    social_manager_id: 'u1',
+    designer_id: 'u3',
+    audiovisual_ids: [],
+    apoyo_ids: [],
+    mdn_since: '2024-01-01',
+    anniversary_date: null,
+    payment_day: 5,
+    monthly_fee: 750,
+    campaign_budget: 500,
+    rif: 'J-12345678-9',
+    website: null,
+    social_links: [],
+    contract_end: null,
+    contract_end_reason: null,
+    pending_line_id: null,
+    line_change_at: null,
+  },
+  {
+    id: 'c2',
+    name: 'Cliente Archivado',
+    line_id: 'l2',
+    deleted_at: '2026-01-01T00:00:00Z',
+    social_manager_id: null,
+    designer_id: null,
+    audiovisual_ids: [],
+    apoyo_ids: [],
+    mdn_since: null,
+    anniversary_date: null,
+    payment_day: null,
+    monthly_fee: null,
+    campaign_budget: null,
+    rif: null,
+    website: null,
+    social_links: [],
+    contract_end: null,
+    contract_end_reason: null,
+    pending_line_id: null,
+    line_change_at: null,
+  },
+]
+const CAMPAIGNS_DIR = [
+  {
+    id: 'ad1',
+    client_id: 'c1',
+    name: 'Campaña Sept',
+    amount: 200,
+    start_date: dateStrInCurrentMonth(1),
+    end_date: dateStrInCurrentMonth(28),
+    status: 'En Curso',
+    responsable_id: 'u1',
+  },
+]
+const DATASET_DIR = {
+  users: USERS_DIR,
+  positions: POSITIONS,
+  departments: DEPARTMENTS,
+  linesAll: LINES_ALL,
+  lines: LINES_ALL.filter((l) => !l.is_general),
+  lineMembers: LINE_MEMBERS_DIR,
+  clients: CLIENTS_DIR,
+  campaigns: CAMPAIGNS_DIR,
+}
+
+describe('resolveClient', () => {
+  it('resuelve por nombre sin tildes/mayúsculas', () => {
+    const { client } = resolveClient('jugos los angeles', CLIENTS_DIR)
+    expect(client.name).toBe('Jugos Los Ángeles')
+  })
+
+  it('prioriza clientes activos sobre archivados con el mismo prefijo', () => {
+    const clients = [
+      { id: 'a1', name: 'Cliente Uno', deleted_at: '2026-01-01' },
+      { id: 'a2', name: 'Cliente Uno Activo', deleted_at: null },
+    ]
+    const { client } = resolveClient('cliente uno activo', clients)
+    expect(client.id).toBe('a2')
+  })
+
+  it('devuelve error si no encuentra el cliente', () => {
+    const { error } = resolveClient('no existe', CLIENTS_DIR)
+    expect(error).toMatch(/No se encontró el cliente/)
+  })
+
+  it('devuelve error de ambigüedad', () => {
+    const clients = [
+      { id: 'a1', name: 'Cliente Uno', deleted_at: null },
+      { id: 'a2', name: 'Cliente Dos', deleted_at: null },
+    ]
+    const { error } = resolveClient('cliente', clients)
+    expect(error).toMatch(/ambiguo/)
+  })
+})
+
+describe('listarCargos', () => {
+  it('cuenta empleados activos por cargo, con su departamento', () => {
+    const res = listarCargos({}, DATASET_DIR)
+    const social = res.cargos.find((c) => c.cargo === 'Social Media Manager')
+    expect(social.empleados).toBe(2) // Ana + Carla
+    expect(social.departamento).toBe('Redes')
+  })
+})
+
+describe('buscarEmpleados', () => {
+  it('filtra por cargo "community" (match parcial)', () => {
+    const res = buscarEmpleados({ cargo: 'community' }, DATASET_DIR)
+    expect(res.empleados.map((e) => e.nombre)).toEqual(['Luis Gómez'])
+  })
+
+  it('filtra por cargo "social"', () => {
+    const res = buscarEmpleados({ cargo: 'social' }, DATASET_DIR)
+    expect(res.total).toBe(2)
+  })
+
+  it('marca a la jefa de línea', () => {
+    const res = buscarEmpleados({ linea: 'Team Bianca' }, DATASET_DIR)
+    const ana = res.empleados.find((e) => e.nombre === 'Ana Pérez')
+    expect(ana.lineas).toEqual(['Team Bianca (jefa)'])
+  })
+
+  it('etiqueta como Alta Gerencia a quien no tiene línea real y access_level alto', () => {
+    const res = buscarEmpleados({}, DATASET_DIR)
+    const carla = res.empleados.find((e) => e.nombre === 'Carla Boss')
+    expect(carla.lineas).toEqual(['Alta Gerencia'])
+  })
+
+  it('devuelve error con el catálogo si el cargo no existe', () => {
+    const res = buscarEmpleados({ cargo: 'inexistente' }, DATASET_DIR)
+    expect(res.error).toMatch(/No se encontró el cargo/)
+  })
+})
+
+describe('fichaCliente', () => {
+  it('resuelve la línea, la jefa y el equipo de una cuenta', () => {
+    const res = fichaCliente({ cliente: 'jugos los angeles' }, DATASET_DIR)
+    expect(res.linea).toBe('Team Bianca')
+    expect(res.jefa_de_linea).toBe('Ana Pérez')
+    expect(res.equipo.social_media.nombre).toBe('Ana Pérez')
+    expect(res.equipo.disenador.nombre).toBe('Marta Ruiz')
+    expect(res.rif).toBe('J-12345678-9')
+    expect(res.activo).toBe(true)
+  })
+
+  it('devuelve error si no encuentra el cliente', () => {
+    const res = fichaCliente({ cliente: 'no existe' }, DATASET_DIR)
+    expect(res.error).toBeDefined()
+  })
+})
+
+describe('clientesDeLinea', () => {
+  it('lista solo clientes activos por defecto', () => {
+    const res = clientesDeLinea({ linea: 'Team Sabrina' }, DATASET_DIR)
+    expect(res.total).toBe(0)
+  })
+
+  it('incluye archivados si se pide explícitamente', () => {
+    const res = clientesDeLinea({ linea: 'Team Sabrina', incluir_archivados: true }, DATASET_DIR)
+    expect(res.total).toBe(1)
+    expect(res.clientes[0]).toEqual({ nombre: 'Cliente Archivado', estado: 'archivado' })
+  })
+})
+
+describe('inversionAds', () => {
+  it('detalle de inversión de un cliente en el mes actual', () => {
+    const res = inversionAds({ cliente: 'jugos los angeles' }, DATASET_DIR)
+    expect(res.total_invertido).toBe(200)
+    expect(res.presupuesto_mensual).toBe(500)
+    expect(res.campanas).toHaveLength(1)
+  })
+
+  it('ranking de toda la cartera ordenado de mayor a menor', () => {
+    const res = inversionAds({}, DATASET_DIR)
+    expect(res.ranking[0]).toEqual({ cliente: 'Jugos Los Ángeles', monto: 200 })
+    expect(res.total_empresa).toBe(200)
   })
 })
 
@@ -952,8 +1212,8 @@ describe('executeTool', () => {
 })
 
 describe('TOOL_DECLARATIONS', () => {
-  it('declara las 13 herramientas con nombre y parámetros', () => {
-    expect(TOOL_DECLARATIONS).toHaveLength(13)
+  it('declara las 18 herramientas con nombre y parámetros', () => {
+    expect(TOOL_DECLARATIONS).toHaveLength(18)
     TOOL_DECLARATIONS.forEach((t) => {
       expect(t.name).toBeTruthy()
       expect(t.description).toBeTruthy()

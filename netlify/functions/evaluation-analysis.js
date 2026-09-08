@@ -2,6 +2,11 @@ import { GoogleGenAI } from '@google/genai'
 import { supabase } from './_lib/supabase.js'
 import { requireUser } from './_lib/requireUser.js'
 import { canAccessModule } from '../../src/lib/permissions.js'
+import { loadCompanyInputs, loadHistoryByUser } from './employee-scores-snapshot.js'
+import { computeAllEmployeeScores } from '../../src/utils/employeeScore.js'
+import { buildScoreNarrative } from '../../src/utils/employeeScoreNarrative.js'
+import { resolveProfile } from '../../src/utils/employeeScoreProfiles.js'
+import { monthIndex } from '../../src/components/tareas/constants.js'
 
 const json = (statusCode, body) => ({
   statusCode,
@@ -9,26 +14,29 @@ const json = (statusCode, body) => ({
   body: JSON.stringify(body),
 })
 
+// Análisis IA sobre la Evaluación automática de desempeño (score 0-100, ver
+// ARQUITECTURA.md §2.7, fase F5). Reemplaza el análisis sobre respuestas 1-5 del
+// flujo manual (retirado en F6): ya no recibe evaluation_sessions/responses, sino
+// el mismo payload que ve el empleado en pantalla (score, breakdown, narrativa
+// determinística, serie de los últimos meses).
 const SYSTEM_INSTRUCTION = `
-In the given data there will be evaluations from many months, you must take into account all the evaluations in order to give a summary of the employee's performance. Don't mention a specific month, just give a summary of the employee's performance.
+You will receive the automated performance score (0-100) of one employee for the current month: the 9 weighted indicators that make up the score (some may not apply to this employee's role — never mention an indicator whose "aplica" is false), a deterministic narrative summary already computed for this month, and the score series of the last few months.
 
-The response must be in JSON format where the keys are in english but the values are in spanish, the response must be a summary of the evaluations and the employee's performance, the response must be a JSON object with the following keys: 'summary', 'strengths', 'weaknesses', 'recommendations'
-Return: {{summary: response}, {strengths: Array<strengths>}, {weaknesses: Array<weaknesses>}, {recommendations: Array<recommendations>}} if for some reason you can't provide the information for a key, just return the following: for summary: "No se puede proporcionar información", for the other keys, return an array with a single string "No se puede proporcionar información". In the strengths, weaknesses and recommendations don't just put the questions related to that key but give insights about what makes that key important, for example: "El empleado tiene una gran capacidad de trabajo en equipo, lo que le permite colaborar eficazmente con sus compañeros y contribuir al éxito del equipo." and "El empleado tiene dificultades para trabajar en equipo, lo que le impide colaborar eficazmente con sus compañeros y contribuir al éxito del equipo." and "El empleado debe mejorar su capacidad de trabajo en equipo para poder colaborar eficazmente con sus compañeros y contribuir al éxito del equipo.".
+The response must be in JSON format where the keys are in english but the values are in spanish. Return a JSON object with the keys: 'summary', 'strengths', 'weaknesses', 'recommendations'. 'summary' is a string; the other three are arrays of strings. If you can't provide information for a key, return for summary: "No se puede proporcionar información", and for the array keys: ["No se puede proporcionar información"].
 
-When speaking about comments, only take into account only the ones made in the latest evaluation period, don't take into account the comments made in the previous evaluation periods other than the last one.
+Only discuss indicators where "aplica" is true — never invent a judgment about an indicator that doesn't apply to this role. Base strengths/weaknesses on the indicators with the highest/lowest "pct", and on the trend shown in the monthly series. Give insights about why each point matters, not just the raw number — for example: "El empleado cumple casi todas sus entregas a tiempo, lo que reduce el riesgo de atrasos en cascada para el resto del equipo." Recommendations must be concrete and actionable, tied to the weakest applicable indicators.
+
+Never cite the "reuniones" (asistencia a reuniones) indicator as a strength, weakness, or recommendation, even if it has the highest or lowest "pct" — it reflects whether a meeting was marked "realizada" by whoever organized it, not attendance behavior by the employee being evaluated, so it is not actionable advice for this person. You may still mention it neutrally in the summary if relevant, but never as a "strengths", "weaknesses", or "recommendations" item.
 `
 
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method Not Allowed' })
 
-  // Verificar que la API key de Gemini esté configurada
   if (!process.env.GEMINI_API_KEY) return json(500, { error: 'IA no configurada' })
 
-  // Autenticar al caller (cualquier usuario autenticado, no solo admin)
   const { error: authError, caller } = await requireUser(event)
   if (authError) return authError
 
-  // Parsear body
   let body
   try {
     body = JSON.parse(event.body ?? '{}')
@@ -39,35 +47,22 @@ export const handler = async (event) => {
   const { employeeId } = body
   if (!employeeId) return json(400, { error: 'employeeId es requerido' })
 
-  // Verificación de tenant: confirmar que el empleado pertenece a la misma empresa
-  // (el service-role bypassa RLS, así que esta comprobación es obligatoria)
+  // Verificación de tenant: el service-role de abajo bypassa RLS, así que esto es
+  // obligatorio (ver hallazgo 1.9 de plan.md).
   const { data: employee, error: empErr } = await supabase
     .from('users')
-    .select('user_id, company_id')
+    .select('user_id, company_id, first_name, last_name, position:positions(position_name)')
     .eq('user_id', employeeId)
     .single()
 
   if (empErr || !employee) return json(404, { error: 'Empleado no encontrado' })
   if (employee.company_id !== caller.company_id) return json(403, { error: 'Forbidden' })
 
-  // Autorización: el propio empleado, su evaluador (manager_id en alguna
-  // sesión), o quien tenga la capability 'evaluaciones.empleados' (admin
-  // incluido). El service-role bypassa RLS, así que esta comprobación es
-  // obligatoria (ver hallazgo 1.9 de plan.md).
+  // Autorización: el propio empleado, o quien tenga la capability
+  // 'evaluaciones.ver_todo' (nivel 4/admin, o configurada más abajo por el
+  // administrador — mismo mecanismo config-driven que el resto de la app).
   const isSelf = employeeId === caller.user_id
-
-  let isManager = false
   if (!isSelf) {
-    const { data: managed } = await supabase
-      .from('evaluation_sessions')
-      .select('id')
-      .eq('employee_id', employeeId)
-      .eq('manager_id', caller.user_id)
-      .limit(1)
-    isManager = Boolean(managed?.length)
-  }
-
-  if (!isSelf && !isManager) {
     const { data: fullCaller, error: callerErr } = await supabase
       .from('users')
       .select('user_id, admin, access_level, department_id, position_id, company_id')
@@ -80,55 +75,77 @@ export const handler = async (event) => {
         .from('module_permissions')
         .select('rules')
         .eq('company_id', fullCaller.company_id)
-        .eq('module_key', 'evaluaciones.empleados')
+        .eq('module_key', 'evaluaciones.ver_todo')
         .maybeSingle()
       if (permErr) return json(500, { error: 'Error verificando permisos' })
 
-      const configByModule = { 'evaluaciones.empleados': permRow?.rules ?? null }
-      if (!canAccessModule('evaluaciones.empleados', fullCaller, configByModule)) {
+      const configByModule = { 'evaluaciones.ver_todo': permRow?.rules ?? null }
+      if (!canAccessModule('evaluaciones.ver_todo', fullCaller, configByModule)) {
         return json(403, { error: 'Forbidden' })
       }
     }
   }
 
-  // Cargar historial completo de evaluaciones con texto de preguntas
-  const { data: sessions, error: sessErr } = await supabase
-    .from('evaluation_sessions')
-    .select(
-      'period, total_score, evaluation_responses(response, questions(text)), evaluation_comments(comment)',
-    )
-    .eq('employee_id', employeeId)
-    .order('period', { ascending: false })
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
+  const period = { year, month, monthIdx: monthIndex(now) }
 
-  if (sessErr) return json(500, { error: sessErr.message })
-  if (!sessions || sessions.length === 0) {
-    return json(400, { error: 'El empleado no tiene evaluaciones' })
+  let inputs
+  let historyByUser
+  try {
+    ;[inputs, historyByUser] = await Promise.all([
+      loadCompanyInputs(employee.company_id),
+      loadHistoryByUser(employee.company_id, year, month),
+    ])
+  } catch (err) {
+    return json(500, { error: err.message })
   }
 
-  // Construir payload agrupado por período (igual que el original)
-  // Los comentarios solo se incluyen del período más reciente (el primero, orden desc)
-  const evaluations = sessions.map((session, index) => ({
-    period: session.period,
-    totalScore: session.total_score,
-    questions: (session.evaluation_responses ?? [])
-      .filter((r) => r.questions?.text)
-      .map((r) => ({
-        text: r.questions.text,
-        response: r.response,
-      })),
-    // Solo incluir comentarios del período más reciente
-    comments:
-      index === 0 ? (session.evaluation_comments ?? []).map((c) => c.comment).filter(Boolean) : [],
-  }))
+  const employeeRow = inputs.users.find((u) => u.user_id === employeeId)
+  if (!employeeRow) return json(404, { error: 'Empleado no encontrado' })
 
-  // Llamar a Gemini
+  const scores = computeAllEmployeeScores([employeeRow], inputs, inputs.profiles, period)
+  const result = scores.get(employeeId)
+
+  if (result.score == null) {
+    return json(400, { error: 'El empleado no tiene datos suficientes este mes para un análisis' })
+  }
+
+  const history = historyByUser.get(employeeId) ?? []
+  const narrativa = buildScoreNarrative(result, history)
+  const profile = resolveProfile(employeeRow, inputs.profiles)
+
+  const serie3Meses = [...history]
+    .sort((a, b) => a.year * 12 + a.month - (b.year * 12 + b.month))
+    .map((h) => ({ year: h.year, month: h.month, score: h.score, estado: h.estado }))
+  serie3Meses.push({ year, month, score: result.score, estado: result.estado })
+
+  const payload = {
+    empleado: `${employee.first_name ?? ''} ${employee.last_name ?? ''}`.trim(),
+    cargo: employee.position?.position_name ?? profile?.name ?? '—',
+    perfilPesos: profile?.weights ?? {},
+    score: result.score,
+    estado: result.estado,
+    breakdown: result.breakdown.map((b) => ({
+      key: b.key,
+      label: b.label,
+      aplica: b.aplica,
+      pct: b.pct,
+      pesoBase: b.pesoBase,
+      pesoEfectivo: b.pesoEfectivo,
+    })),
+    narrativa,
+    serie3Meses,
+  }
+
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents:
-        'I need you to give me an analysis on the employee performance based on his evaluations ' +
-        JSON.stringify(evaluations),
+        'I need an analysis of this employee performance based on their automated score data: ' +
+        JSON.stringify(payload),
       config: {
         maxOutputTokens: 5000,
         temperature: 1,

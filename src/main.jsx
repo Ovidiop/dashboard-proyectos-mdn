@@ -173,6 +173,14 @@ createRoot(document.getElementById('root')).render(
               }
             />
             <Route
+              path="/empresa/desempeno-perfiles"
+              element={
+                <RequireModule moduleKey="empresa">
+                  <EmpresaPage />
+                </RequireModule>
+              }
+            />
+            <Route
               path="/empresa/permisos"
               element={
                 <RequireModule moduleKey="empresa">
@@ -181,7 +189,10 @@ createRoot(document.getElementById('root')).render(
               }
             />
 
-            {/* Evaluaciones */}
+            {/* Evaluaciones — flujo manual retirado en F6 (ver ARQUITECTURA.md §2.7):
+                /evaluaciones/resumen y /evaluaciones/perfil-v2 → /evaluaciones;
+                /evaluaciones/perfil y /evaluaciones/desempeno (viejo alias) → mi-desempeno /
+                /evaluaciones respectivamente. */}
             <Route
               path="/evaluaciones"
               element={
@@ -191,7 +202,7 @@ createRoot(document.getElementById('root')).render(
               }
             />
             <Route
-              path="/evaluaciones/resumen"
+              path="/evaluaciones/mi-desempeno"
               element={
                 <RequireModule moduleKey="evaluaciones">
                   <EvaluacionesPage />
@@ -199,7 +210,7 @@ createRoot(document.getElementById('root')).render(
               }
             />
             <Route
-              path="/evaluaciones/perfil"
+              path="/evaluaciones/historial"
               element={
                 <RequireModule moduleKey="evaluaciones">
                   <EvaluacionesPage />
@@ -214,13 +225,18 @@ createRoot(document.getElementById('root')).render(
                 </RequireModule>
               }
             />
+            <Route path="/evaluaciones/resumen" element={<Navigate to="/evaluaciones" replace />} />
             <Route
               path="/evaluaciones/perfil-v2"
-              element={
-                <RequireModule moduleKey="evaluaciones">
-                  <EvaluacionesPage />
-                </RequireModule>
-              }
+              element={<Navigate to="/evaluaciones" replace />}
+            />
+            <Route
+              path="/evaluaciones/desempeno"
+              element={<Navigate to="/evaluaciones" replace />}
+            />
+            <Route
+              path="/evaluaciones/perfil"
+              element={<Navigate to="/evaluaciones/mi-desempeno" replace />}
             />
 
             {/* Reportes */}

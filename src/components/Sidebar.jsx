@@ -247,14 +247,13 @@ function Sidebar() {
   const [operacionOpen, setOperacionOpen] = useState(isOperacionRoute)
   const isEmpresaRoute = location.pathname.startsWith('/empresa')
 
-  const canEval = userProfile?.access_level >= 2 || userProfile?.admin === true
   const isMetricasRoute = location.pathname.startsWith('/reportes')
   const isMonitorUsoRoute = location.pathname.startsWith('/monitor-uso')
   const isReunionesRoute = location.pathname.startsWith('/reuniones')
   const isEvalRoute = location.pathname.startsWith('/evaluaciones')
-  const evalActive = location.pathname === '/evaluaciones'
-  const evalResumenActive = location.pathname === '/evaluaciones/resumen'
-  const evalPerfilActive = location.pathname === '/evaluaciones/perfil'
+  const evalDesempenoActive = location.pathname === '/evaluaciones'
+  const evalMiDesempenoActive = location.pathname === '/evaluaciones/mi-desempeno'
+  const evalHistorialActive = location.pathname === '/evaluaciones/historial'
   const [evalOpen, setEvalOpen] = useState(isEvalRoute)
 
   return (
@@ -570,67 +569,61 @@ function Sidebar() {
 
               {evalOpen && (
                 <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
-                  {/* Mi Perfil — visible a todos */}
-                  <Link
-                    to="/evaluaciones/perfil"
-                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
-                      evalPerfilActive
-                        ? 'bg-[#FFB800] text-[#111]'
-                        : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-                    }`}
-                  >
-                    <span
-                      className={`flex-shrink-0 ${evalPerfilActive ? 'text-[#111]' : 'text-[#666]'}`}
+                  {/* Mi Desempeño — score automático propio, visible a todos */}
+                  {canR('evaluaciones.mi-desempeno') && (
+                    <Link
+                      to="/evaluaciones/mi-desempeno"
+                      className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
+                        evalMiDesempenoActive
+                          ? 'bg-[#FFB800] text-[#111]'
+                          : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                      }`}
                     >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.7"
+                      <span
+                        className={`flex-shrink-0 ${evalMiDesempenoActive ? 'text-[#111]' : 'text-[#666]'}`}
                       >
-                        <circle cx="8" cy="5.5" r="2.5" />
-                        <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" strokeLinecap="round" />
-                      </svg>
-                    </span>
-                    <span className="flex-1">Mi Perfil</span>
-                  </Link>
+                        {CHART_ICON}
+                      </span>
+                      <span className="flex-1">Mi Desempeño</span>
+                    </Link>
+                  )}
 
-                  {/* Empleados y Resumen — solo para managers/admins */}
-                  {canEval && (
-                    <>
-                      <Link
-                        to="/evaluaciones"
-                        className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
-                          evalActive
-                            ? 'bg-[#FFB800] text-[#111]'
-                            : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-                        }`}
+                  {/* Desempeño — score automático del equipo (lista + ranking), nivel 2+ */}
+                  {canR('evaluaciones.desempeno') && (
+                    <Link
+                      to="/evaluaciones"
+                      className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
+                        evalDesempenoActive
+                          ? 'bg-[#FFB800] text-[#111]'
+                          : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                      }`}
+                    >
+                      <span
+                        className={`flex-shrink-0 ${evalDesempenoActive ? 'text-[#111]' : 'text-[#666]'}`}
                       >
-                        <span
-                          className={`flex-shrink-0 ${evalActive ? 'text-[#111]' : 'text-[#666]'}`}
-                        >
-                          {EVAL_ICON}
-                        </span>
-                        <span className="flex-1">Empleados</span>
-                      </Link>
-                      <Link
-                        to="/evaluaciones/resumen"
-                        className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
-                          evalResumenActive
-                            ? 'bg-[#FFB800] text-[#111]'
-                            : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-                        }`}
+                        {EVAL_ICON}
+                      </span>
+                      <span className="flex-1">Desempeño</span>
+                    </Link>
+                  )}
+
+                  {/* Historial — evaluaciones manuales retiradas, solo lectura */}
+                  {canR('evaluaciones.historial') && (
+                    <Link
+                      to="/evaluaciones/historial"
+                      className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
+                        evalHistorialActive
+                          ? 'bg-[#FFB800] text-[#111]'
+                          : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                      }`}
+                    >
+                      <span
+                        className={`flex-shrink-0 ${evalHistorialActive ? 'text-[#111]' : 'text-[#666]'}`}
                       >
-                        <span
-                          className={`flex-shrink-0 ${evalResumenActive ? 'text-[#111]' : 'text-[#666]'}`}
-                        >
-                          {CHART_ICON}
-                        </span>
-                        <span className="flex-1">Resumen</span>
-                      </Link>
-                    </>
+                        {CHART_ICON}
+                      </span>
+                      <span className="flex-1">Historial</span>
+                    </Link>
                   )}
                 </div>
               )}

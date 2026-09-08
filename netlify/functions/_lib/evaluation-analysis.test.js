@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const requireUserMock = vi.fn()
 const fromMock = vi.fn()
 const generateContentMock = vi.fn()
+const loadCompanyInputsMock = vi.fn()
+const loadHistoryByUserMock = vi.fn()
 
 vi.mock('./requireUser.js', () => ({ requireUser: requireUserMock }))
 vi.mock('./supabase.js', () => ({ supabase: { from: (...args) => fromMock(...args) } }))
@@ -10,6 +12,10 @@ vi.mock('@google/genai', () => ({
   GoogleGenAI: vi.fn().mockImplementation(function () {
     this.models = { generateContent: generateContentMock }
   }),
+}))
+vi.mock('../employee-scores-snapshot.js', () => ({
+  loadCompanyInputs: loadCompanyInputsMock,
+  loadHistoryByUser: loadHistoryByUserMock,
 }))
 
 const { handler } = await import('../evaluation-analysis.js')
@@ -24,69 +30,122 @@ function singleChain(result) {
   return builder
 }
 
-// evaluation_sessions.select().eq().eq().limit() (chequeo de manager)
-function managerChain(result) {
-  const builder = { select: () => builder, eq: () => builder, limit: async () => result }
-  return builder
-}
-
 // module_permissions.select().eq().eq().maybeSingle()
 function permRowChain(result) {
   const builder = { select: () => builder, eq: () => builder, maybeSingle: async () => result }
   return builder
 }
 
-// evaluation_sessions.select().eq().order() (historial final para la IA)
-function sessionsChain(result) {
-  const builder = { select: () => builder, eq: () => builder, order: async () => result }
-  return builder
+const EMPLOYEE_ROW = {
+  user_id: 'emp-1',
+  company_id: 'c1',
+  first_name: 'Ana',
+  last_name: 'Pérez',
+  position: { position_name: 'Diseñadora' },
 }
 
-const SESSIONS_OK = {
-  data: [
-    { period: '2026-01-01', total_score: 4, evaluation_responses: [], evaluation_comments: [] },
-  ],
-  error: null,
+const DEFAULT_PROFILE = {
+  id: 'p1',
+  is_default: true,
+  match: {},
+  weights: {
+    entregas: 25,
+    puntualidad: 20,
+    arrastre: 10,
+    tareas_fijas: 15,
+    piezas_av: 10,
+    reuniones: 5,
+    campanas: 5,
+    chequeo: 5,
+    tickets: 0,
+  },
 }
 
-describe('evaluation-analysis.js handler — autorización (Bloque 1.9)', () => {
+function baseInputs(overrides = {}) {
+  return {
+    users: [
+      {
+        user_id: 'emp-1',
+        department_id: 1,
+        position_id: 1,
+        access_level: 1,
+        hire_date: null,
+        on_probation: false,
+      },
+    ],
+    clients: [],
+    tasks: [],
+    cnp: [],
+    marks: [],
+    piezas: [],
+    meetings: [],
+    campaigns: [],
+    paidCampaigns: [],
+    checks: [],
+    tickets: [],
+    vacations: [],
+    profiles: [DEFAULT_PROFILE],
+    ...overrides,
+  }
+}
+
+function tasksForScore() {
+  const rows = []
+  for (let i = 0; i < 10; i++) {
+    rows.push({
+      assignee_ids: ['emp-1'],
+      created_by: 'jefe',
+      request_date: '2026-09-01',
+      due_date: `2026-09-${10 + i}`,
+      closed_date: `2026-09-${9 + i}`,
+      status: 'Terminado',
+    })
+  }
+  // Abiertas, no bloqueadas ni vencidas — para que 'arrastre' también aplique
+  // (peso base combinado >= 50, mínimo del orquestador).
+  for (let i = 0; i < 3; i++) {
+    rows.push({
+      assignee_ids: ['emp-1'],
+      created_by: 'jefe',
+      request_date: '2026-09-01',
+      due_date: '2026-09-30',
+      closed_date: null,
+      status: 'En proceso',
+    })
+  }
+  return rows
+}
+
+describe('evaluation-analysis.js handler — score automático (F5)', () => {
   beforeEach(() => {
     fromMock.mockReset()
     requireUserMock.mockReset()
     generateContentMock.mockReset()
+    loadCompanyInputsMock.mockReset()
+    loadHistoryByUserMock.mockReset()
     process.env.GEMINI_API_KEY = 'test-key'
     generateContentMock.mockResolvedValue({
       text: JSON.stringify({ summary: 'ok', strengths: [], weaknesses: [], recommendations: [] }),
     })
+    loadHistoryByUserMock.mockResolvedValue(new Map())
   })
 
-  it('permite (sin fila de capability = abierto, misma convención que el resto de la app)', async () => {
-    requireUserMock.mockResolvedValue({ caller: { user_id: 'compañero-1', company_id: 'c1' } })
-    fromMock
-      .mockReturnValueOnce(
-        singleChain({ data: { user_id: 'emp-1', company_id: 'c1' }, error: null }),
-      ) // empleado objetivo
-      .mockReturnValueOnce(managerChain({ data: [], error: null })) // no es su manager
-      .mockReturnValueOnce(
-        singleChain({
-          data: { user_id: 'compañero-1', admin: false, access_level: 1, company_id: 'c1' },
-          error: null,
-        }),
-      ) // fullCaller
-      .mockReturnValueOnce(permRowChain({ data: null, error: null })) // sin fila = abierto
-      .mockReturnValueOnce(sessionsChain(SESSIONS_OK))
+  it('permite al propio empleado pedir su análisis sin más chequeos', async () => {
+    requireUserMock.mockResolvedValue({ caller: { user_id: 'emp-1', company_id: 'c1' } })
+    fromMock.mockReturnValueOnce(singleChain({ data: EMPLOYEE_ROW, error: null }))
+    loadCompanyInputsMock.mockResolvedValue(baseInputs({ tasks: tasksForScore() }))
 
     const res = await handler(makeEvent({ employeeId: 'emp-1' }))
     expect(res.statusCode).toBe(200)
+    const parsed = JSON.parse(generateContentMock.mock.calls[0][0].contents.replace(/^[^{]*/, ''))
+    expect(parsed.empleado).toBe('Ana Pérez')
+    expect(parsed.score).not.toBeNull()
   })
 
-  it('deniega (403) cuando evaluaciones.empleados está restringida a nivel 4 y el caller es nivel 1', async () => {
+  it('deniega (403) a un tercero cuando evaluaciones.ver_todo está restringida a nivel 4', async () => {
     requireUserMock.mockResolvedValue({ caller: { user_id: 'compañero-1', company_id: 'c1' } })
     fromMock
-      .mockReturnValueOnce(
-        singleChain({ data: { user_id: 'emp-1', company_id: 'c1' }, error: null }),
-      )
-      .mockReturnValueOnce(managerChain({ data: [], error: null }))
+      .mockReturnValueOnce(singleChain({ data: EMPLOYEE_ROW, error: null }))
       .mockReturnValueOnce(
         singleChain({
           data: { user_id: 'compañero-1', admin: false, access_level: 1, company_id: 'c1' },
@@ -106,29 +165,36 @@ describe('evaluation-analysis.js handler — autorización (Bloque 1.9)', () => 
     expect(res.statusCode).toBe(403)
   })
 
-  it('permite al propio empleado pedir su análisis sin más chequeos', async () => {
-    requireUserMock.mockResolvedValue({ caller: { user_id: 'emp-1', company_id: 'c1' } })
+  it('permite a admin=true sin necesitar la fila de capability', async () => {
+    requireUserMock.mockResolvedValue({ caller: { user_id: 'admin-1', company_id: 'c1' } })
     fromMock
+      .mockReturnValueOnce(singleChain({ data: EMPLOYEE_ROW, error: null }))
       .mockReturnValueOnce(
-        singleChain({ data: { user_id: 'emp-1', company_id: 'c1' }, error: null }),
+        singleChain({
+          data: { user_id: 'admin-1', admin: true, access_level: 4, company_id: 'c1' },
+          error: null,
+        }),
       )
-      .mockReturnValueOnce(sessionsChain(SESSIONS_OK))
+    loadCompanyInputsMock.mockResolvedValue(baseInputs({ tasks: tasksForScore() }))
 
     const res = await handler(makeEvent({ employeeId: 'emp-1' }))
     expect(res.statusCode).toBe(200)
-    expect(fromMock).toHaveBeenCalledTimes(2)
   })
 
-  it('permite al manager (evaluador) de ese empleado', async () => {
-    requireUserMock.mockResolvedValue({ caller: { user_id: 'manager-1', company_id: 'c1' } })
-    fromMock
-      .mockReturnValueOnce(
-        singleChain({ data: { user_id: 'emp-1', company_id: 'c1' }, error: null }),
-      )
-      .mockReturnValueOnce(managerChain({ data: [{ id: 1 }], error: null })) // sí es su manager
-      .mockReturnValueOnce(sessionsChain(SESSIONS_OK))
+  it('403 si el empleado pertenece a otra empresa (tenant check)', async () => {
+    requireUserMock.mockResolvedValue({ caller: { user_id: 'emp-1', company_id: 'c2' } })
+    fromMock.mockReturnValueOnce(singleChain({ data: EMPLOYEE_ROW, error: null }))
 
     const res = await handler(makeEvent({ employeeId: 'emp-1' }))
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode).toBe(403)
+  })
+
+  it('400 cuando el empleado no tiene datos suficientes este mes (score null)', async () => {
+    requireUserMock.mockResolvedValue({ caller: { user_id: 'emp-1', company_id: 'c1' } })
+    fromMock.mockReturnValueOnce(singleChain({ data: EMPLOYEE_ROW, error: null }))
+    loadCompanyInputsMock.mockResolvedValue(baseInputs()) // sin tareas → sin_datos
+
+    const res = await handler(makeEvent({ employeeId: 'emp-1' }))
+    expect(res.statusCode).toBe(400)
   })
 })

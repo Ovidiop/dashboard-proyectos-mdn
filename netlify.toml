@@ -5,6 +5,12 @@
 [functions]
   directory = "netlify/functions"
 
+# Congela el score de desempeño del mes anterior el día 5 a las 08:00 Caracas (12:00
+# UTC), después del cron SQL de cierre de metric_reports (07:30 Caracas) — ver
+# netlify/functions/employee-scores-snapshot.js y ARQUITECTURA.md §2.7.
+[functions."employee-scores-snapshot"]
+  schedule = "0 12 5 * *"
+
 [[redirects]]
   from = "/api/projects"
   to = "/.netlify/functions/projects"
@@ -44,6 +50,12 @@
 [[redirects]]
   from = "/api/av-workload-insight"
   to = "/.netlify/functions/av-workload-insight"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/employee-scores-snapshot"
+  to = "/.netlify/functions/employee-scores-snapshot"
   status = 200
   force = true
 

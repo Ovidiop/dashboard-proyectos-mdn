@@ -1,25 +1,24 @@
 import { useEffect } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import EmployeeEvalList from '../components/evaluaciones/EmployeeEvalList'
 import EmployeeProfileView from '../components/evaluaciones/EmployeeProfileView'
-import SummaryView from '../components/evaluaciones/SummaryView'
-import MiPerfilView from '../components/evaluaciones/MiPerfilView'
-import MiPerfilV2View from '../components/evaluaciones/MiPerfilV2View'
+import DesempenoView from '../components/evaluaciones/DesempenoView'
+import MiDesempenoView from '../components/evaluaciones/MiDesempenoView'
+import HistorialLegacyView from '../components/evaluaciones/HistorialLegacyView'
 
+// Evaluación automática de desempeño (ver ARQUITECTURA.md §2.7). El flujo manual
+// (Empleados/Resumen/Mi Perfil/Mi Perfil v2 + EvaluationModal) se retiró en la fase
+// F6 — su historial sigue disponible en modo solo lectura en el tab "Historial".
 const ALL_TABS = [
-  { key: 'empleados', label: 'Empleados', path: '/evaluaciones' },
-  { key: 'resumen', label: 'Resumen', path: '/evaluaciones/resumen' },
-  { key: 'perfil', label: 'Mi Perfil', path: '/evaluaciones/perfil' },
-  { key: 'perfil-v2', label: 'Mi Perfil v2', path: '/evaluaciones/perfil-v2' },
+  { key: 'mi-desempeno', label: 'Mi Desempeño', path: '/evaluaciones/mi-desempeno' },
+  { key: 'desempeno', label: 'Desempeño', path: '/evaluaciones' },
+  { key: 'historial', label: 'Historial', path: '/evaluaciones/historial' },
 ]
 
 function pathToKey(pathname) {
-  if (pathname.startsWith('/evaluaciones/resumen')) return 'resumen'
-  // perfil-v2 debe verificarse ANTES que perfil para evitar falso match
-  if (pathname.startsWith('/evaluaciones/perfil-v2')) return 'perfil-v2'
-  if (pathname.startsWith('/evaluaciones/perfil')) return 'perfil'
-  return 'empleados'
+  if (pathname.startsWith('/evaluaciones/mi-desempeno')) return 'mi-desempeno'
+  if (pathname.startsWith('/evaluaciones/historial')) return 'historial'
+  return 'desempeno'
 }
 
 export default function EvaluacionesPage() {
@@ -30,34 +29,30 @@ export default function EvaluacionesPage() {
 
   const activeKey = pathToKey(location.pathname)
   const isProfileView = location.pathname.startsWith('/evaluaciones/empleado/')
-  // Nota: isPerfilView captura tanto /perfil como /perfil-v2 (startsWith).
-  // Esto está bien: el redirect de no-managers lleva a /evaluaciones/perfil,
-  // que coincide con ambas rutas y permite acceder a v2 sin ser expulsado.
-  const isPerfilView = location.pathname.startsWith('/evaluaciones/perfil')
-  const isPerfilV2View = location.pathname.startsWith('/evaluaciones/perfil-v2')
+  const isMiDesempenoView = location.pathname.startsWith('/evaluaciones/mi-desempeno')
+  const isHistorialView = location.pathname.startsWith('/evaluaciones/historial')
 
-  // Visibilidad config-driven de tabs y acciones
-  const canManage = can('evaluaciones.manage')
-  // Tabs visibles según las capacidades configuradas
+  // Visibilidad config-driven de tabs
   const visibleTabs = ALL_TABS.filter((t) => can(`evaluaciones.${t.key}`))
 
-  // Si el usuario no puede ver el tab activo, redirigir a su perfil
+  // Si el usuario no puede ver el tab activo, redirigir a su propio desempeño
+  // (siempre visible — cada quien ve el suyo).
   useEffect(() => {
-    if (userProfile == null || isPerfilView || isProfileView) return
+    if (userProfile == null || isMiDesempenoView || isProfileView) return
     if (!can(`evaluaciones.${activeKey}`)) {
-      navigate('/evaluaciones/perfil', { replace: true })
+      navigate('/evaluaciones/mi-desempeno', { replace: true })
     }
-  }, [can, navigate, userProfile, activeKey, isPerfilView, isProfileView])
+  }, [can, navigate, userProfile, activeKey, isMiDesempenoView, isProfileView])
 
-  // El perfil de OTRO empleado (/evaluaciones/empleado/:id) quedaba fuera del
-  // guard de arriba: cualquiera con acceso al módulo abría el historial
-  // completo de un compañero. Solo puede verlo el propio empleado o quien
-  // tenga la capability 'evaluaciones.empleados' (ver hallazgo 1.9).
+  // El perfil de OTRO empleado (/evaluaciones/empleado/:id, historial legacy)
+  // solo puede verlo el propio empleado o quien tenga 'evaluaciones.ver_todo'
+  // (ver hallazgo 1.9 de plan.md — nunca abrir el historial completo de un
+  // compañero a cualquiera con acceso al módulo).
   useEffect(() => {
     if (userProfile == null || !isProfileView) return
     if (employeeId === userProfile.user_id) return
-    if (!can('evaluaciones.empleados')) {
-      navigate('/evaluaciones/perfil', { replace: true })
+    if (!can('evaluaciones.ver_todo')) {
+      navigate('/evaluaciones/mi-desempeno', { replace: true })
     }
   }, [can, navigate, userProfile, isProfileView, employeeId])
 
@@ -78,7 +73,7 @@ export default function EvaluacionesPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-[26px] font-bold text-[#111] leading-tight">Evaluaciones</h1>
-            <p className="text-[15px] text-[#888] mt-0.5">Desempeño · Historial · Resumen</p>
+            <p className="text-[15px] text-[#888] mt-0.5">Desempeño · Historial</p>
           </div>
         </div>
 
@@ -104,28 +99,12 @@ export default function EvaluacionesPage() {
         {/* Contenido */}
         {isProfileView ? (
           <EmployeeProfileView employeeId={employeeId} />
-        ) : isPerfilV2View ? (
-          <MiPerfilV2View
-            userId={userProfile.user_id}
-            companyId={userProfile.company_id}
-            departmentId={userProfile.department_id}
-            userProfile={userProfile}
-            canEval={canManage}
-          />
-        ) : isPerfilView ? (
-          <MiPerfilView
-            userId={userProfile.user_id}
-            companyId={userProfile.company_id}
-            departmentId={userProfile.department_id}
-            userProfile={userProfile}
-          />
-        ) : activeKey === 'empleados' ? (
-          <EmployeeEvalList
-            companyId={userProfile.company_id}
-            currentUserId={userProfile.user_id}
-          />
+        ) : isMiDesempenoView ? (
+          <MiDesempenoView userId={userProfile.user_id} companyId={userProfile.company_id} />
+        ) : isHistorialView ? (
+          <HistorialLegacyView companyId={userProfile.company_id} />
         ) : (
-          <SummaryView companyId={userProfile.company_id} />
+          <DesempenoView />
         )}
       </div>
     </main>

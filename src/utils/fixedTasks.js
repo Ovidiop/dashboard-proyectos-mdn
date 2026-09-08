@@ -21,6 +21,20 @@ export const TASK_LABELS = {
   calendario: 'Calendario',
 }
 
+/**
+ * A qué rol de `metric_clients` (social_manager_id | designer_id) le corresponde entregar
+ * cada tarea fija — usado por el indicador `tareas_fijas` de la Evaluación automática de
+ * desempeño (ver ARQUITECTURA.md §2.7) para no acreditar la misma celda a ambos roles del
+ * cliente. 'artes' es la única que produce Diseño (Redes → Diseño le pide grillas, Diseño
+ * responde con artes); las otras 3 las produce Redes.
+ */
+export const FIXED_TASK_ROLE = {
+  metricas: 'social',
+  grilla: 'social',
+  artes: 'designer',
+  calendario: 'social',
+}
+
 // ─── Semanas del mes ────────────────────────────────────────────────────────
 
 /** Nº de días del mes (year, month 1-indexed). */
@@ -196,4 +210,90 @@ export function aggregateEmployeeFixedTasks(marks, clientIds) {
   const cumplimientoPct = total > 0 ? Math.round((entregadas / total) * 100) : null
 
   return { total, entregadas, cumplimientoPct, byTaskKey }
+}
+
+// ─── Agregación → indicador `tareas_fijas` de la Evaluación automática ─────────
+
+/**
+ * Cumplimiento y puntualidad de tareas fijas de un empleado, atribuidas por ROL
+ * (`FIXED_TASK_ROLE`) en vez de acreditar las 4 tareas completas a cualquiera que
+ * participe en el cliente. Corrige dos problemas de `aggregateEmployeeFixedTasks`:
+ *
+ * 1. Doble conteo: un cliente con social manager y diseñador distintos ya no le suma
+ *    'artes' al social manager ni 'grilla'/'metricas'/'calendario' al diseñador.
+ * 2. Meta derivada del calendario, no de las marcas existentes: una celda que nadie
+ *    marcó cuenta como NO cumplida (antes se ignoraba silenciosamente, sobrevalorando
+ *    a quien no usa el sistema). Reusa el mismo recorrido que `computeProductividad`.
+ *
+ * @param {Array} marks    fixed_task_marks del período (ya acotadas a company/mes)
+ * @param {Array} clients  metric_clients no borrados de la empresa (con fixed_tasks,
+ *                         social_manager_id, designer_id)
+ * @param {Array} weeks    buildFixedWeeks(year, month)
+ * @param {string} userId
+ * @returns {{
+ *   meta:number, si:number, cumplimientoPct:number|null, puntualPct:number|null,
+ *   byTaskKey: Record<string,{meta:number, si:number}>,
+ *   byRole: { social:{meta:number,si:number}, designer:{meta:number,si:number} },
+ * }}
+ */
+export function aggregateEmployeeFixedTasksByRole(
+  marks,
+  clients,
+  weeks,
+  userId,
+  { year, month } = {},
+) {
+  const byTaskKey = {}
+  const byRole = { social: { meta: 0, si: 0 }, designer: { meta: 0, si: 0 } }
+  let meta = 0
+  let si = 0
+  let siPuntuales = 0
+
+  TASK_KEYS.forEach((k) => {
+    byTaskKey[k] = { meta: 0, si: 0 }
+  })
+
+  clients.forEach((client) => {
+    const roles = []
+    if (client.social_manager_id === userId) roles.push('social')
+    if (client.designer_id === userId) roles.push('designer')
+    if (roles.length === 0) return
+
+    TASK_KEYS.forEach((taskKey) => {
+      const role = FIXED_TASK_ROLE[taskKey]
+      if (!roles.includes(role)) return
+      if (!taskAppliesToClient(client.fixed_tasks, taskKey)) return
+
+      weeks.forEach((week) => {
+        if (!tasksForWeek(week.n, weeks).includes(taskKey)) return
+        const mark = marks.find(
+          (m) => m.client_id === client.id && m.task_key === taskKey && m.period_week === week.n,
+        )
+        if (mark?.status === 'na') return
+
+        meta++
+        byTaskKey[taskKey].meta++
+        byRole[role].meta++
+
+        if (mark?.status === 'si') {
+          si++
+          byTaskKey[taskKey].si++
+          byRole[role].si++
+          if (mark.marked_at && year != null && month != null) {
+            const { date: deadline } = taskDeadline(taskKey, week, year, month)
+            // La fecha tope es "hasta las 5pm" (ver taskDeadline) — comparar contra
+            // medianoche penalizaría injustamente una marca hecha esa misma tarde.
+            const cutoff = deadline ? new Date(deadline) : null
+            if (cutoff) cutoff.setHours(17, 0, 0, 0)
+            if (cutoff && new Date(mark.marked_at) <= cutoff) siPuntuales++
+          }
+        }
+      })
+    })
+  })
+
+  const cumplimientoPct = meta > 0 ? si / meta : null
+  const puntualPct = si > 0 ? siPuntuales / si : null
+
+  return { meta, si, cumplimientoPct, puntualPct, byTaskKey, byRole }
 }
