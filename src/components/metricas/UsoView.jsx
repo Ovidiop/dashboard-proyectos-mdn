@@ -474,16 +474,32 @@ function UsoLineDetail({ line, prevMonthNumber }) {
                 </td>
               </tr>
             ))}
+            {line.external.map((e) => (
+              <tr key={e.userId} className="border-b border-[#f0ede3] last:border-0 bg-[#fffaf0]">
+                <td className="px-3 py-2 text-[#333]">
+                  {e.name}
+                  <span className="ml-1.5 text-[10px] font-mono uppercase tracking-[0.06em] text-[#b8860b]">
+                    Apoyo externo
+                  </span>
+                </td>
+                {USAGE_MODULES.map((mod) => (
+                  <td
+                    key={mod.key}
+                    className={`text-right px-3 py-2 tabular-nums ${
+                      e.counts[mod.key] === 0 ? 'text-red-600 font-bold' : 'text-[#555]'
+                    }`}
+                  >
+                    {e.counts[mod.key]}
+                  </td>
+                ))}
+                <td className="text-right px-3 py-2 font-bold text-[#111] tabular-nums">
+                  {e.total}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
-
-      {line.external.length > 0 && (
-        <div className="text-[13px] text-[#888]">
-          <span className="font-semibold text-[#555]">Apoyo externo: </span>
-          {line.external.map((e) => `${e.name} (${e.total})`).join(', ')}
-        </div>
-      )}
 
       {punctualitySummary.length > 0 && (
         <div className="text-[13px] text-[#888]">

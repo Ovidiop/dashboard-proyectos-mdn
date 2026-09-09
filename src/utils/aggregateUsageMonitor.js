@@ -130,6 +130,18 @@ function rosterOf(line) {
   return ids
 }
 
+/**
+ * Todos los actores con actividad registrada bajo el line_id de una línea, sea o no
+ * miembro formal del roster. El total de la línea mide lo que se le puso a ESE
+ * line_id, no solo lo que hizo su roster — si alguien ajeno (dirección, apoyo de
+ * otra línea) crea contenido con ese line_id, cuenta para esa línea igual.
+ */
+function actorsOfLine(bucket, lineId, roster) {
+  const ids = new Set(roster)
+  ;(bucket.get(lineId) ?? new Map()).forEach((_, actorId) => ids.add(actorId))
+  return ids
+}
+
 function sumCounts(countsList) {
   const out = zeroCounts()
   countsList.forEach((c) => {
@@ -302,22 +314,29 @@ export function aggregateUsageMonitor({ lines, users, raw, year, month }) {
   })
 
   // ── Ensamblar resultado por línea ─────────────────────────────────────────
-  // `counts`/`total`/`baseline`/`peerAvg`/`trend`/`punctuality` miden al EQUIPO
-  // completo (jefa + miembros del roster), no solo a la jefa — el objetivo es medir
-  // el uso de la herramienta por team, no solo la actividad de quien lo lidera.
+  // `counts`/`total`/`baseline`/`peerAvg`/`trend`/`punctuality` miden TODO lo que se
+  // cargó con el line_id de esta línea, sea quien sea que lo creó — no solo su
+  // roster formal. Si dirección u otra persona ajena a la línea le pone contenido a
+  // ese equipo, debe reflejarse en su uso igual que si lo hubiera cargado la jefa.
   const byLine = normLines.map((line) => {
     const lead = line.leadId ? { userId: line.leadId, name: userName(users, line.leadId) } : null
     const roster = rosterOf(line)
+    const lineActors = actorsOfLine(bucket, line.id, roster)
 
-    const counts = getTeamCounts(bucket, line.id, roster, targetYm)
+    const counts = getTeamCounts(bucket, line.id, lineActors, targetYm)
     const total = Object.values(counts).reduce((a, b) => a + b, 0)
 
-    const prevMonth = getTeamCounts(bucket, line.id, roster, ymKey(months[2].year, months[2].month))
+    const prevMonth = getTeamCounts(
+      bucket,
+      line.id,
+      lineActors,
+      ymKey(months[2].year, months[2].month),
+    )
 
     // Baseline = promedio literal de los 3 meses previos (meses sin dato cuentan como 0).
     const baseline = zeroCounts()
     months.slice(0, 3).forEach(({ year: y, month: m }) => {
-      const c = getTeamCounts(bucket, line.id, roster, ymKey(y, m))
+      const c = getTeamCounts(bucket, line.id, lineActors, ymKey(y, m))
       USAGE_MODULES.forEach((mod) => {
         baseline[mod.key] += c[mod.key] / 3
       })
@@ -329,7 +348,8 @@ export function aggregateUsageMonitor({ lines, users, raw, year, month }) {
     const peerAvg = zeroCounts()
     if (peers.length > 0) {
       peers.forEach((peer) => {
-        const c = getTeamCounts(bucket, peer.id, rosterOf(peer), targetYm)
+        const peerActors = actorsOfLine(bucket, peer.id, rosterOf(peer))
+        const c = getTeamCounts(bucket, peer.id, peerActors, targetYm)
         USAGE_MODULES.forEach((mod) => {
           peerAvg[mod.key] += c[mod.key] / peers.length
         })
@@ -344,7 +364,7 @@ export function aggregateUsageMonitor({ lines, users, raw, year, month }) {
       baselineTotal,
     })
 
-    const punct = getTeamPunctuality(punctuality, line.id, roster, targetYm)
+    const punct = getTeamPunctuality(punctuality, line.id, lineActors, targetYm)
     const punctuality_ =
       punct.total === 0
         ? 'sin_datos'
@@ -379,6 +399,8 @@ export function aggregateUsageMonitor({ lines, users, raw, year, month }) {
       .filter((m) => m.total > 0 || true) // se listan todos, no solo con actividad (para ver quién NO aporta)
 
     // Apoyo externo: actores con filas en esta línea que no son parte del roster.
+    // Ya están incluidos en `counts`/`total` de arriba (vía lineActors) — este listado
+    // es solo para mostrar QUIÉN de afuera aportó, no para excluirlos del conteo.
     const actorIdsInLine = [...(bucket.get(line.id)?.keys() ?? [])]
     const external = actorIdsInLine
       .filter((id) => !roster.has(id))
@@ -387,14 +409,15 @@ export function aggregateUsageMonitor({ lines, users, raw, year, month }) {
         return {
           userId: id,
           name: userName(users, id),
+          counts: c,
           total: Object.values(c).reduce((a, b) => a + b, 0),
         }
       })
       .filter((e) => e.total > 0)
 
-    // Tendencia: total del EQUIPO por mes, ventana completa de 4 meses.
+    // Tendencia: total de la línea por mes (roster + apoyo externo), ventana de 4 meses.
     const trend = months.map(({ year: y, month: m }) => {
-      const c = getTeamCounts(bucket, line.id, roster, ymKey(y, m))
+      const c = getTeamCounts(bucket, line.id, lineActors, ymKey(y, m))
       return { year: y, month: m, total: Object.values(c).reduce((a, b) => a + b, 0) }
     })
 

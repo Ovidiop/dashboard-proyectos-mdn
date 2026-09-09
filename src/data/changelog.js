@@ -208,6 +208,7 @@ export const CHANGELOG = [
       'En el detalle de desempeño de cada persona, los indicadores que no aplican a su cargo (por ejemplo, "Tickets IT" para alguien que no es de soporte) ya no se muestran atenuados: directamente se ocultan, para que la ficha sea más clara.',
       'Corregido: cargos de coordinación/dirección que no producen contenido (Sub-Director, Coordinador de Tecnología, Coordinador de Desarrollo Laboral) tenían un puntaje de desempeño calculado con indicadores que no les correspondían (piezas audiovisuales, campañas, chequeo de redes). Ahora su puntaje se basa solo en el cumplimiento de sus tareas.',
       'El equipo de Audiovisual ya puede asignar editores y gestionar las piezas de las pautas realizadas (checklist de estado, formato y desglose de piezas), sin necesidad de pedírselo a la coordinadora. Agendar, declinar o marcar una pauta como realizada sigue siendo exclusivo de la coordinadora.',
+      'Corregido: en el Monitor de uso, si alguien ajeno al equipo (por ejemplo, dirección) cargaba CNP, tareas u otras actividades a nombre de una línea, no se contaba en el total de esa línea. Ahora toda la actividad cargada a un equipo cuenta para su monitor de uso, sea o no quien la cargó parte formal del equipo. Además, ese apoyo externo ahora aparece como filas más de la tabla de detalle (con la etiqueta "Apoyo externo"), en vez de un texto aparte.',
     ],
   },
   {

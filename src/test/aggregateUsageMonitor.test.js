@@ -280,7 +280,7 @@ describe('aggregateUsageMonitor', () => {
     expect(byLine[0].total).toBe(0)
   })
 
-  it('separa jefa, equipo y apoyo externo (actor con line_id de la línea pero sin ser miembro)', () => {
+  it('el apoyo externo (actor con line_id de la línea pero sin ser miembro) suma al total del equipo', () => {
     const raw = emptyRaw({
       tasks: [
         { team_id: 'l1', created_by: 'jefa-1', created_at: '2026-09-03', due_date: null },
@@ -296,8 +296,12 @@ describe('aggregateUsageMonitor', () => {
       month: MONTH,
     })
     const [l1] = byLine
-    expect(l1.counts.tareas).toBe(2) // jefa + miembro-1 (equipo), sin el apoyo externo
+    // jefa + miembro-1 + externo-1: todo lo cargado con el line_id de esta línea cuenta,
+    // sea o no quien lo cargó parte del roster formal.
+    expect(l1.counts.tareas).toBe(3)
     expect(l1.members.find((m) => m.userId === 'miembro-1').total).toBe(1)
+    // El apoyo externo se sigue listando aparte, para saber QUIÉN aportó desde afuera
+    // del roster — pero ya no se excluye del total de la línea.
     expect(l1.external.map((e) => e.name)).toContain('Paola G.')
   })
 
